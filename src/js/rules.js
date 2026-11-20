@@ -97,7 +97,7 @@ export function regionFood(p){
  if(p.occ>0)v=0;
  return Math.round(v)-FOOD.town[p.lvl];
 }
-export function armyFood(p){return p.army.filter(u=>!UT[u.t].general).length*FOOD.unit}
+export function armyFood(p){const g=p.army.find(u=>UT[u.t].general&&u.g&&u.g.army),k=g&&g.g.army.tr.includes('forage')?0.5:1;return Math.ceil(p.army.filter(u=>!UT[u.t].general).length*FOOD.unit*k)}
 export function foodOf(f){
  let prod=0,use=0;
  for(const p of G.prov)if(p.owner===f){const r=regionFood(p);if(r>=0)prod+=r;else use-=r;use+=armyFood(p)}

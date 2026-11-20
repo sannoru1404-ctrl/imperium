@@ -7,7 +7,7 @@ import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
 import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost, provinceOf, ownsProvince, isProvCap, edictAt, foodOf, regionFood, starving, faithOrder } from './rules.js';
 import { B, tactical } from './battle-sim.js';
 import { modal, closeModal, ask, toast } from './ui.js';
-import { STANCES, TRAITS, EDICTS, PROVINCE_BONUS, FAITHS } from './data.js';
+import { STANCES, TRAITS, EDICTS, PROVINCE_BONUS, FAITHS, TRADITIONS, TRAD_XP } from './data.js';
 import { gatherReinforcements, reinfText, afterBattle, stanceOf, setStanceOf, stanceMods, genLabel, stars, makeGeneral, isGen } from './war.js';
 
 // ===================== MAP RENDER =====================
@@ -143,6 +143,8 @@ export function drawPanel(){
    p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${u.g?u.g.name:uname(u.t,p.owner)}${stars(u)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
    const gu=p.army.find(u=>isGen(u)&&u.g);
    if(gu)h+=`<div class="small" style="margin-top:4px">👑 Воевода ${genLabel(gu)}${gu.g.traits.length?'':' · черт нет'} <span style="opacity:.7">(опыт ${gu.g.xp})</span></div>`;
+   if(gu){const a=gu.g.army||{xp:0,tr:[]},next=TRAD_XP[a.tr.length];
+    h+=`<div class="small">🎖 Традиции войска: ${a.tr.length?a.tr.map(t=>`<span title="${TRADITIONS[t].d}">${TRADITIONS[t].i} ${TRADITIONS[t].n}</span>`).join(', '):'пока нет'}${next?` <span style="opacity:.7">(${a.xp}/${next})</span>`:''}</div>`}
    h+=`</div><div class="small" style="margin-top:4px">Сила войска: ${Math.round(str(p.army))}${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}${stanceOf(p)!=='none'?` · ${STANCES[stanceOf(p)].i} ${STANCES[stanceOf(p)].n}`:''}</div>`;
    if(own&&gen&&!p.besiege)h+=`<div class="row stances" style="margin-top:6px;gap:4px">${Object.keys(STANCES).map(k=>`<button class="${stanceOf(p)===k?'on pri':''}" style="padding:4px 7px;font-size:12px" title="${STANCES[k].d}" onclick="setStance('${k}')">${STANCES[k].i} ${STANCES[k].n}</button>`).join('')}</div>`;
   } else h+=`<div class="small" style="margin-top:6px">Войска нет. Гарнизон: ${p.gar} ополч.${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
@@ -220,7 +222,7 @@ export async function moveArmy(from,to){
  const [am,dm,amb,tr]=stanceMods(from,to,att);
  if(amb)await ask('🌲 Засада!',`<p>Враг ждал в засаде у ${to.n}! Войско в смятении и вступает в бой в походной колонне.</p>`,[['ok','К бою!',1]]);
  const res=ch==='fight'?await tactical(att,def,PLAYER,to.owner,'att',to.n,siegeOpts(to,PLAYER),{ambush:amb,camp:dm>1,tired:tr}):autoResolve(att,def,sm[0],sm[1]*dm,am);
- afterBattle(res,reinf);
+ afterBattle(res,reinf,att,def);
  applyBattle(from,to,PLAYER,res);
  G.sel=to.owner===PLAYER?to.id:from.id;
  render();checkEnd();

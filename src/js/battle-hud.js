@@ -1,11 +1,11 @@
-import { UT, uname, FORMS } from './data.js';
+import { UT, uname, FORMS, ABIL } from './data.js';
 import { $ } from './util.js';
-import { B, alive, rdist, msg, canForm, hasAura } from './battle-sim.js';
+import { B, alive, rdist, msg, canForm, hasAura, abReady, abOn, useAbility } from './battle-sim.js';
 import { S3 } from './battle-3d.js';
 
 // ---------- HUD ----------
 export function buildCards(){
- $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div>${r.o.xp?`<div style="position:absolute;top:1px;right:3px;font-size:8px;color:#ffd84a">${'★'.repeat(r.o.xp)}</div>`:''}${r.o.g?`<div style="position:absolute;top:1px;left:3px;font-size:8px;color:#ffd84a">${r.o.g.rank}</div>`:''}<div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div><div class="cb"><i class="st"></i></div></div>`).join('');
+ $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div>${r.o.xp?`<div style="position:absolute;top:1px;right:3px;font-size:8px;color:#ffd84a">${'★'.repeat(r.o.xp)}</div>`:''}${r.o.g?`<div style="position:absolute;top:1px;left:3px;font-size:8px;color:#ffd84a">${r.o.g.rank}</div>`:''}<div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div><div class="cb"><i class="st"></i></div>${(UT[r.t].abil||[]).length?`<div class="ab" onclick="event.stopPropagation();bAbil('${UT[r.t].abil[0]}',${r.id})">${ABIL[UT[r.t].abil[0]].i}</div>`:''}</div>`).join('');
 }
 export function cardTap(id){
  const r=B.regs.find(x=>x.id===id);if(!r||!alive(r)||r.routing)return;
@@ -23,15 +23,31 @@ export function updateHud(){
  B.regs.filter(r=>r.side==='p').forEach(r=>{const c=$('card'+r.id);if(!c)return;
   c.classList.toggle('sel',B.sel.has(r));c.classList.toggle('gone',!alive(r)||r.routing);
   c.querySelector('.m').style.width=Math.max(0,r.men)+'%';c.querySelector('.mo').style.width=Math.min(100,Math.max(0,r.morale))+'%';c.querySelector('.st').style.width=r.stam+'%';
+  const ab=c.querySelector('.ab'),k=(UT[r.t].abil||[])[0];
+  if(ab){const on=(UT[r.t].abil||[]).some(x=>abOn(r,x));ab.classList.toggle('on',on);ab.classList.toggle('cd',!on&&!abReady(r,k))}
   c.querySelector('.ci').textContent=r.routing?'🏳️':!alive(r)?'☠':UT[r.t].i+(r.form!=='line'?FORMS[r.form].i:'');});
  const sel=[...B.sel];
  const stamWord=v=>v>=75?'свежие':v>=50?'бодрые':v>=25?'устали':'измотаны';
  if(sel.length===1){const r=sel[0];
-  $('bInfo').innerHTML=`<b>${uname(r.t,r.fac)}</b> · ${Math.round(r.men)} бойцов · дух ${Math.round(Math.max(0,r.morale))}% · ${stamWord(r.stam)}${r.form!=='line'?' · '+FORMS[r.form].n.toLowerCase():''}${hasAura(r)&&!r.gen?' · 👑 рядом воевода':''}`;
- } else $('bInfo').innerHTML=sel.length?`Выбрано полков: ${sel.length}`:'<span class="small">Тапни свой полк, затем — врага (атака) или землю (марш).</span>';
+  $('bInfo').innerHTML=abilButtons(sel)+`<b>${uname(r.t,r.fac)}</b> · ${Math.round(r.men)} бойцов · дух ${Math.round(Math.max(0,r.morale))}% · ${stamWord(r.stam)}${r.form!=='line'?' · '+FORMS[r.form].n.toLowerCase():''}${hasAura(r)&&!r.gen?' · 👑 рядом воевода':''}`;
+ } else $('bInfo').innerHTML=sel.length?abilButtons(sel)+`Выбрано полков: ${sel.length}`:'<span class="small">Тапни свой полк, затем — врага (атака) или землю (марш).</span>';
  const fr=sel.find(r=>(UT[r.t].forms||[]).length),f=fr?UT[fr.t].forms[0]:null;
  $('bForm').disabled=!fr;
  $('bForm').textContent=!fr?'Строй':sel.every(r=>r.form!=='line')?'▭ Обычный строй':FORMS[f].i+' '+FORMS[f].n;
+}
+function abilButtons(sel){
+ const ks=[...new Set(sel.flatMap(r=>UT[r.t].abil||[]))];
+ return ks.length?`<div class="row" style="gap:4px;margin-bottom:3px">${ks.map(k=>{const A=ABIL[k],any=sel.some(r=>abReady(r,k)),on=sel.some(r=>abOn(r,k));
+  const cd=Math.ceil(Math.min(...sel.filter(r=>r.ab&&r.ab[k]).map(r=>r.ab[k].cd)));
+  return `<button class="bbtn${on?' pri':''}" style="padding:3px 7px;font-size:12px" title="${A.d}" onclick="bAbil('${k}')" ${any?'':'disabled'}>${A.i} ${A.n}${!any&&cd>0?` ${cd}с`:''}</button>`}).join('')}</div>`:'';
+}
+// use an ability: on one regiment (card button) or on every selected regiment that has it
+export function bAbil(k,id){
+ if(!B||B.over)return;
+ const rs=id?B.regs.filter(r=>r.id===id):[...B.sel];
+ let n=0;for(const r of rs)if(useAbility(r,k))n++;
+ if(!n&&id){const r=rs[0];const alt=(UT[r.t].abil||[]).find(x=>abReady(r,x));if(alt)useAbility(r,alt)}
+ updateHud();
 }
 export function bPause(){if(!B||B.over)return;B.paused=!B.paused;updateHud()}
 export function bSpeed(){if(!B)return;B.speed=B.speed===1?2:B.speed===2?3:1;updateHud()}

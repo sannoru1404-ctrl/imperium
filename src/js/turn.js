@@ -154,10 +154,10 @@ export async function aiAttack(from,to,f,units){
   const ch=await ask(`⚠ ${FACT[f].n} атакуют!`,`<p>Враг вторгся в провинцию <b>${to.n}</b>.</p><p>Враг: <b>${Math.round(str(att))}</b> (${att.length} отр.)</p>${reinfText(reinf,'att')}<p>Твоя оборона: <b>${Math.round(str(def.filter(u=>!u.gar))+str(garUnits(to),1.2))}</b> (${def.length-to.gar} отр. + ${to.gar} ополч.)</p>${reinfText(reinf,'def')}${amb?'<p>🌲 <b>Враг угодил в засаду!</b></p>':''}`,
    [['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт']]);
   const res=ch==='fight'?await tactical(att,def,f,PLAYER,'def',to.n,siegeOpts(to,f),{ambush:amb,camp:dm>1,tired}):autoResolve(att,def,sm[0],sm[1]*dm,am);
-  afterBattle(res,reinf);
+  afterBattle(res,reinf,att,def);
   applyBattle(from,to,f,res);G.sel=null;render();checkEnd();
  } else {
-  const res=autoResolve(att,def,sm[0],sm[1]*dm,am);afterBattle(res,reinf);applyBattle(from,to,f,res);
+  const res=autoResolve(att,def,sm[0],sm[1]*dm,am);afterBattle(res,reinf,att,def);applyBattle(from,to,f,res);
  }
 }
 // walls make the garrison and the defending army stronger; siege engineering (tech) cancels part of it

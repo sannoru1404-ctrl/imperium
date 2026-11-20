@@ -76,16 +76,33 @@ export function aiFactions(){return Object.keys(FACT).filter(f=>f!==PLAYER&&f!==
 // ammo: volleys per battle · skirmish: keeps distance from enemy infantry automatically
 // forms: formations the unit can take (see FORMS) · names: per-culture name overrides
 export const UT={
- mil:   {n:'Ополчение',     i:'🔱',atk:4,def:3,mov:2,cost:150,forms:['wall'],names:{rus:'Пешее ополчение',pol:'Крестьянское ополчение',west:'Ополчение',islam:'Ополчение гази'}},
- spear: {n:'Копейщики',     i:'🛡️',atk:5,def:7,mov:2,cost:300,antiCav:2,forms:['wall'],names:{}},
- druzh: {n:'Латная пехота', i:'⚔️',atk:8,def:7,mov:2,cost:450,forms:['wall'],names:{rus:'Пешая дружина',pol:'Пешие латники',west:'Спешенные рыцари',byz:'Скутаты',islam:'Гулямы',steppe:'Пешие воины'}},
- arch:  {n:'Лучники',       i:'🏹',atk:5,def:2,mov:2,cost:300,range:55,reload:3.0,ammo:16,skirmish:true,forms:['loose'],names:{}},
- xbow:  {n:'Арбалетчики',   i:'🎯',atk:8,def:3,mov:2,cost:400,range:42,reload:5.0,ammo:12,ap:0.4,forms:['loose'],names:{}},
- knight:{n:'Рыцари',        i:'🐴',atk:9,def:7,mov:4,cost:700,charge:1.6,forms:['wedge'],names:{rus:'Конная дружина',pol:'Рыцари',west:'Рыцари',byz:'Катафракты',islam:'Тяжёлая конница',steppe:'Знатные всадники'}},
- hasb:  {n:'Конные лучники',i:'🏇',atk:5,def:3,mov:4,cost:500,range:40,reload:3.0,ammo:20,skirmish:true,forms:['loose'],names:{rus:'Конные стрелки',steppe:'Конные лучники',byz:'Трапезиты',islam:'Туркоманы'}},
- gen:   {n:'Воевода',       i:'👑',atk:7,def:6,mov:4,cost:400,charge:1.3,general:true,forms:['wedge'],names:{rus:'Князь с дружиной',pol:'Воевода с хоругвью',west:'Сеньор со свитой',byz:'Стратиг с тагмой',islam:'Эмир с гвардией',steppe:'Хан с нукерами'}},
+ mil:   {n:'Ополчение',     i:'🔱',abil:['hold'],atk:4,def:3,mov:2,cost:150,forms:['wall'],names:{rus:'Пешее ополчение',pol:'Крестьянское ополчение',west:'Ополчение',islam:'Ополчение гази'}},
+ spear: {n:'Копейщики',     i:'🛡️',abil:['hold'],atk:5,def:7,mov:2,cost:300,antiCav:2,forms:['wall'],names:{}},
+ druzh: {n:'Латная пехота', i:'⚔️',abil:['hold','charge'],atk:8,def:7,mov:2,cost:450,forms:['wall'],names:{rus:'Пешая дружина',pol:'Пешие латники',west:'Спешенные рыцари',byz:'Скутаты',islam:'Гулямы',steppe:'Пешие воины'}},
+ arch:  {n:'Лучники',       i:'🏹',abil:['volley'],atk:5,def:2,mov:2,cost:300,range:55,reload:3.0,ammo:16,skirmish:true,forms:['loose'],names:{}},
+ xbow:  {n:'Арбалетчики',   i:'🎯',abil:['volley'],atk:8,def:3,mov:2,cost:400,range:42,reload:5.0,ammo:12,ap:0.4,forms:['loose'],names:{}},
+ knight:{n:'Рыцари',        i:'🐴',abil:['charge'],atk:9,def:7,mov:4,cost:700,charge:1.6,forms:['wedge'],names:{rus:'Конная дружина',pol:'Рыцари',west:'Рыцари',byz:'Катафракты',islam:'Тяжёлая конница',steppe:'Знатные всадники'}},
+ hasb:  {n:'Конные лучники',i:'🏇',abil:['volley'],atk:5,def:3,mov:4,cost:500,range:40,reload:3.0,ammo:20,skirmish:true,forms:['loose'],names:{rus:'Конные стрелки',steppe:'Конные лучники',byz:'Трапезиты',islam:'Туркоманы'}},
+ gen:   {n:'Воевода',       i:'👑',abil:['rally','charge'],atk:7,def:6,mov:4,cost:400,charge:1.3,general:true,forms:['wedge'],names:{rus:'Князь с дружиной',pol:'Воевода с хоругвью',west:'Сеньор со свитой',byz:'Стратиг с тагмой',islam:'Эмир с гвардией',steppe:'Хан с нукерами'}},
 };
 
+// Battle abilities (buttons on the regiment cards). dur: seconds active, cd: cooldown in seconds.
+export const ABIL={
+ charge:{n:'Натиск',i:'💨',dur:10,cd:60,d:'10 с: быстрее на 30%, удар с разбега в 1.5 раза сильнее.'},
+ hold:  {n:'Стоять насмерть',i:'🪨',dur:20,cd:90,d:'20 с: защита +25%, дух почти не падает, полк не бежит.'},
+ volley:{n:'Залп',i:'🎇',dur:0,cd:45,d:'Сразу залп двойной силы.'},
+ rally: {n:'Сплотить',i:'📯',dur:0,cd:90,d:'Дух +25 полкам рядом с воеводой, бегущие возвращаются в бой.'},
+};
+// Army traditions: the army (not only its general) learns. Points: 1 per battle, +1 for a victory.
+export const TRAD_XP=[2,5,9];
+export const TRADITIONS={
+ drill: {n:'Выучка',i:'🛡',d:'+1 к защите всех полков'},
+ fury:  {n:'Ярость',i:'🔥',d:'+0.75 к атаке всех полков'},
+ march: {n:'Походная закалка',i:'🥾',d:'усталость копится на 25% медленнее'},
+ iron:  {n:'Железная стойкость',i:'⛓',d:'дух +10 в начале боя'},
+ vets:  {n:'Школа ветеранов',i:'⭐',d:'полки чаще получают звёзды'},
+ forage:{n:'Фуражиры',i:'🌾',d:'войско ест вдвое меньше'},
+};
 export function isRanged(t){return !!UT[t].range}
 export function isCav(t){return UT[t].mov>2}
 export function uname(t,f){const c=FACT[f]&&FACT[f].cult;return (UT[t].names&&(UT[t].names[c]))||UT[t].n}

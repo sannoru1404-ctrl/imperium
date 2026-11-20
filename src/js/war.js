@@ -1,5 +1,5 @@
 // Veterans, generals, reinforcements, army stances and historical events.
-import { FACT, UT, PLAYER, XP_MAX, GEN_NAMES, TRAITS, GEN_XP, STANCES, AMBUSH_CHANCE, RAID_SHARE, EVENTS, MAX_ARMY } from './data.js';
+import { FACT, UT, PLAYER, XP_MAX, GEN_NAMES, TRAITS, GEN_XP, STANCES, AMBUSH_CHANCE, RAID_SHARE, EVENTS, MAX_ARMY, TRADITIONS, TRAD_XP } from './data.js';
 import { G, P, adj, mk, str, addLog } from './state.js';
 import { rand } from './rng.js';
 import { atWar, declareWar } from './diplo.js';
@@ -19,7 +19,24 @@ export function makeGeneral(u,f){
  u.g=g;
 }
 // give every general on the map a name (new recruits, starting armies, event hosts)
-export function nameGenerals(){for(const p of G.prov)for(const u of p.army)if(isGen(u)&&!u.g)makeGeneral(u,p.owner)}
+export function nameGenerals(){
+ for(const p of G.prov){
+  for(const u of p.army)if(isGen(u)&&!u.g)makeGeneral(u,p.owner);
+  // an army that lost its general keeps its traditions for the next one
+  const g=p.army.find(u=>isGen(u)&&u.g),k=p.army.find(u=>u.legacy);
+  if(g&&k){if(!armyOf(g).tr.length)g.g.army=k.legacy;delete k.legacy}
+ }
+}
+// ---------- army traditions ----------
+export function armyOf(u){if(!u.g.army)u.g.army={xp:0,tr:[]};return u.g.army}
+export function traditions(units){const g=units.find(x=>isGen(x)&&x.g&&x.g.army);return g?g.g.army.tr:[]}
+function armyLearns(u,won){
+ const a=armyOf(u);a.xp+=won?2:1;
+ while(a.tr.length<TRAD_XP.length&&a.xp>=TRAD_XP[a.tr.length]){
+  const free=Object.keys(TRADITIONS).filter(k=>!a.tr.includes(k));
+  a.tr.push(free[Math.floor(rand()*free.length)]);
+ }
+}
 export function genOf(units){const u=units.find(x=>isGen(x)&&x.g);return u?u.g:null}
 export function hasTrait(units,t){const g=genOf(units);return !!(g&&g.traits.includes(t))}
 export function genLabel(u){
@@ -27,18 +44,18 @@ export function genLabel(u){
  return `${u.g.name} ${'★'.repeat(u.g.rank)}${u.g.traits.length?' · '+u.g.traits.map(t=>TRAITS[t].n).join(', '):''}`;
 }
 // strength multiplier the general gives to the whole army (used by the campaign strength estimate)
-export function genMult(units){const g=genOf(units);if(!g)return 1;let m=1+0.03*(g.rank-1);if(g.traits.includes('strat'))m*=1.1;if(g.traits.includes('coward'))m*=0.95;if(g.traits.includes('brave'))m*=1.03;return m}
+export function genMult(units){const g=genOf(units);if(!g)return 1;let m=1+0.03*(g.rank-1)+0.04*((g.army&&g.army.tr.length)||0);if(g.traits.includes('strat'))m*=1.1;if(g.traits.includes('coward'))m*=0.95;if(g.traits.includes('brave'))m*=1.03;return m}
 export function xpMult(u){return 1+0.06*(u.xp||0)}
 export function stars(u){return u.xp?'<span style="color:#ffd84a">'+'★'.repeat(u.xp)+'</span>':''}
 
 // survivors of a battle learn; generals climb in rank and gain traits
 export function grantXP(units,won){
- const seen=new Set();
+ const seen=new Set(),vets=traditions(units).includes('vets')?0.15:0;
  for(const u of units){if(seen.has(u.id))continue;seen.add(u.id);
-  if(isGen(u)&&u.g){const g=u.g;g.xp+=won?2:1;
+  if(isGen(u)&&u.g){const g=u.g;g.xp+=won?2:1;armyLearns(u,won);
    while(g.rank<5&&g.xp>=GEN_XP[g.rank]){g.rank++;if(g.rank===2||g.rank===4)newTrait(g)}
    continue;}
-  if((u.xp||0)<XP_MAX&&rand()<(won?0.55:0.2))u.xp=(u.xp||0)+1;
+  if((u.xp||0)<XP_MAX&&rand()<(won?0.55:0.2)+vets)u.xp=(u.xp||0)+1;
  }
 }
 
@@ -69,7 +86,12 @@ export function returnReinforcements(list,res){
  res.att=res.att.filter(u=>!ids.has(u.id));res.def=res.def.filter(u=>!ids.has(u.id));
 }
 
-export function afterBattle(res,reinf){
+export function afterBattle(res,reinf,att,def){
+ // a fallen general hands the army's traditions to a surviving regiment
+ for(const [orig,surv] of [[att,res.att],[def,res.def]]){
+  const g=(orig||[]).find(u=>isGen(u)&&u.g&&u.g.army&&u.g.army.tr.length);
+  if(g&&!surv.includes(g)){const k=surv.find(u=>!isGen(u)&&!u.gar);if(k)k.legacy=g.g.army}
+ }
  grantXP(res.att,res.win==='att');grantXP(res.def.filter(u=>!u.gar),res.win==='def');
  // reinforcements on the losing side that survived also go home (and learn a little)
  for(const {p,side} of reinf||[])if(res.win!==side)grantXP(p.army.filter(u=>u.hp>=15),false);

@@ -1,4 +1,4 @@
-import { UT, uname, FORMS } from './data.js';
+import { UT, uname, FORMS, ABIL } from './data.js';
 import { $, rnd } from './util.js';
 import { nextId } from './state.js';
 import { autoResolve } from './turn.js';
@@ -33,7 +33,8 @@ export function makeReg(o,side,x,z,fac){
  const r={id:nextId(),o,t:o.t,side,fac,xpB:0.5*xp,defB:(hasTech(fac,'mil1')?1:0)+0.5*xp,chT:hasTech(fac,'mil2')?1.2:1,men:o.hp,start:Math.max(o.hp,1),morale:100+5*xp,stam:100,x,z,face:side==='p'?Math.PI:0,
   order:null,state:'idle',chargeT:0,idleT:5,braceT:0,cool:rand()*2,fled:false,dead:false,routing:false,inForest:false,
   spd:SPD[d.mov]||5,ranged:!!d.range,range:d.range||0,ammo:d.ammo||0,cav:d.mov>2,gen:!!d.general,skirmish:!!d.skirmish,
-  form:d.charge&&d.forms&&d.forms.includes('wedge')?'wedge':'line',body,figs:[],bannerKey:''};
+  form:d.charge&&d.forms&&d.forms.includes('wedge')?'wedge':'line',body,figs:[],bannerKey:'',
+  ab:Object.fromEntries((d.abil||[]).map(k=>[k,{cd:0,t:0}])),stamM:1};
  const n=Math.max(1,Math.ceil(r.men/100*FIGMAX[body]));
  for(let i=0;i<n;i++)r.figs.push({x,z,ph:rand()*6.28,j:(rand()-.5)*0.3});
  return r;
@@ -98,6 +99,10 @@ function applyMods(mods){
   B.sideM[s]=1+0.03*(g.o.g.rank-1)+(T.includes('strat')?0.1:0);
   if(T.includes('siege'))B.siegeM[s]=true;
   if(T.includes('brave'))g.brave=true;
+  const tr=(g.o.g.army&&g.o.g.army.tr)||[];
+  B.regs.forEach(r=>{if(r.side!==s)return;
+   if(tr.includes('drill'))r.defB+=1;if(tr.includes('fury'))r.xpB+=0.75;
+   if(tr.includes('march'))r.stamM=0.75;if(tr.includes('iron'))r.morale+=10});
   const dm=(T.includes('brave')?10:0)-(T.includes('coward')?10:0);
   if(dm)B.regs.forEach(r=>{if(r.side===s)r.morale+=dm});
  }
@@ -111,12 +116,34 @@ function applyMods(mods){
  if(mods.camp)B.regs.forEach(r=>{if(r.side===defS){r.defB+=1;r.braceT=Math.max(r.braceT,8)}});
 }
 
+// ---------- abilities ----------
+export function abOn(r,k){return !!(r.ab&&r.ab[k]&&r.ab[k].t>0)}
+export function abReady(r,k){const a=r.ab&&r.ab[k];if(!a||a.cd>0||!alive(r)||r.routing)return false;
+ if(k==='volley')return r.ranged&&r.ammo>0;
+ return true}
+export function useAbility(r,k){
+ if(!abReady(r,k))return false;
+ const A=ABIL[k],a=r.ab[k];a.cd=A.cd;a.t=A.dur;
+ if(k==='volley'){r.cool=0;r.volleyX=2}
+ if(k==='hold'){r.order={type:'move',x:r.x,z:r.z}}
+ if(k==='rally'){
+  for(const o of B.regs)if(o.side===r.side&&!o.fled&&!o.dead&&rdist(o,r)<AURA_R*1.5){
+   o.morale=Math.min(100,Math.max(o.morale,0)+25);
+   if(o.routing&&o.men>o.start*0.25){o.routing=false;o.order=null;o.morale=Math.max(o.morale,30)}}
+ }
+ msg((r.side==='p'?'':'Враг: ')+A.i+' '+A.n+' — '+uname(r.t,r.fac).toLowerCase());
+ return true;
+}
+function tickAbilities(r,dt){for(const k in r.ab||{}){const a=r.ab[k];a.cd=Math.max(0,a.cd-dt);a.t=Math.max(0,a.t-dt)}}
+
 // ---------- helpers ----------
 export function turnTo(r,tx,tz,dt,rate=3){const d=angWrap(Math.atan2(tx-r.x,tz-r.z)-r.face);const m=rate*dt;r.face+=clamp(d,-m,m)}
 export function fatigue(r){return r.stam>=50?1:r.stam>=25?0.9:0.75}
 export function speedOf(r){
  let s=r.spd*(r.inForest?(r.cav?0.6:0.85):1)*(r.stam<25?0.8:1);
  if(r.form==='wall')s*=0.5;
+ if(abOn(r,'charge'))s*=1.3;
+ if(abOn(r,'hold'))s*=0.5;
  return s;
 }
 // ---------- siege helpers ----------
@@ -176,7 +203,7 @@ export function hasAura(r){
 }
 function frontal(b,a){const [fx,fz]=fwd(b);const vx=a.x-b.x,vz=a.z-b.z,vl=Math.hypot(vx,vz)||1;return (fx*vx+fz*vz)/vl}
 function heightMult(a,b){return 1+clamp((Hgt(a.x,a.z)-Hgt(b.x,b.z))*0.04,-0.15,0.2)}
-function moraleHit(b,amount){b.morale-=amount*(hasAura(b)?0.75:1)}
+function moraleHit(b,amount){b.morale-=amount*(hasAura(b)?0.75:1)*(abOn(b,'hold')?0.3:1)}
 
 export function meleeHit(a,b,dt,burst){
  const da=UT[a.t],db=UT[b.t];
@@ -191,12 +218,13 @@ export function meleeHit(a,b,dt,burst){
  if(b.form==='wedge')def*=0.85;
  if(b.form==='loose')def*=0.8;
  if(b.braceT>0&&dot>0.35)def*=1.2;                 // a line that stood ready meets the attack braced
+ if(abOn(b,'hold'))def*=1.25;
  if(acrossWall(a,b))mult*=isAttacker(a)?0.7:1.2;     // fighting up a wall is hard
  if(b.climb>0)mult*=1.25;                            // men on ladders are easy prey
  const eff=atk*mult*fl*heightMult(a,b)/def*(0.35+0.65*a.men/a.start);
  let dmg;
  if(burst){
-  const chargeM=(da.charge||(a.cav?1:0.45))*(a.form==='wedge'?1.4:1)*(a.cav?a.chT:1);
+  const chargeM=(da.charge||(a.cav?1:0.45))*(a.form==='wedge'?1.4:1)*(a.cav?a.chT:1)*(abOn(a,'charge')?1.5:1);
   dmg=9*eff*chargeM;
   const braced=dot>0.35&&(b.form==='wall'||db.antiCav);
   if(braced&&a.cav){dmg*=0.3;a.men-=6;moraleHit(a,10)}
@@ -211,7 +239,8 @@ export function fire(a,b){
  a.cool=(da.reload||3.2)*(0.9+rand()*0.2);
  a.ammo--;if(a.ammo<=0){a.ranged=false;a.skirmish=false;if(a.side==='p')msg('Кончились стрелы: '+uname(a.t,a.fac).toLowerCase())}
  let def=(db.def+b.defB)*(1-(da.ap||0));
- let dmg=6.5*(da.atk+a.xpB)*(B.sideM?B.sideM[a.side]:1)*fatigue(a)*heightMult(a,b)/Math.max(1,def)*(0.35+0.65*a.men/a.start);
+ let dmg=(a.volleyX||1)*6.5*(da.atk+a.xpB)*(B.sideM?B.sideM[a.side]:1)*fatigue(a)*heightMult(a,b)/Math.max(1,def)*(0.35+0.65*a.men/a.start);
+ a.volleyX=0;
  if(b.inForest)dmg*=0.5;
  const dot=frontal(b,a);
  if(dot>0.35&&b.body==='inf'&&!b.ranged)dmg*=b.form==='wall'?0.5:0.75; // shields
@@ -285,7 +314,7 @@ export function simStep(dt){
      else{
       if(!prevFight){
        r.braceT=r.idleT>3?6:0;
-       if(r.form!=='wall'&&r.chargeT>(r.cav?1.2:1.5))meleeHit(r,tg,0,true);
+       if(r.form!=='wall'&&r.chargeT>(abOn(r,'charge')?0.6:r.cav?1.2:1.5))meleeHit(r,tg,0,true);
       }
       r.state='fight';r.chargeT=0;turnTo(r,tg.x,tg.z,dt);meleeHit(r,tg,dt);
      }
@@ -294,8 +323,9 @@ export function simStep(dt){
   }
   if(r.wst)r.state=r.wst;else r.climb=0;
   // stamina, readiness, morale recovery
-  if(r.state==='fight'){r.stam-=(r.form==='wall'?1.0:1.5)*dt;r.braceT=Math.max(0,r.braceT-dt)}
-  else if(r.state==='move')r.stam-=(r.cav?1.0:0.8)*dt;
+  tickAbilities(r,dt);
+  if(r.state==='fight'){r.stam-=(r.form==='wall'?1.0:1.5)*(abOn(r,'hold')?0.5:1)*r.stamM*dt;r.braceT=Math.max(0,r.braceT-dt)}
+  else if(r.state==='move')r.stam-=(r.cav?1.0:0.8)*r.stamM*dt;
   else r.stam+=2.5*dt;
   r.stam=clamp(r.stam,0,100);
   r.idleT=(r.state==='idle'||r.state==='aim')?r.idleT+dt:0;
@@ -305,6 +335,7 @@ export function simStep(dt){
  for(const r of B.regs){
   if(!alive(r))continue;
   if(r.men<=0.5){r.dead=true;r.men=0;if(r.gen)generalLost(r,true);continue}
+  if(abOn(r,'hold')&&r.morale<=0&&r.men>=r.start*0.12)r.morale=5;     // standing to the last
   if(!r.routing&&(r.morale<=0||r.men<r.start*0.12)){r.routing=true;r.order=null;B.sel.delete(r);
    if(r.gen)generalLost(r,false);
    msg((r.side==='p'?'💀 Бегут твои: ':'🏳 Бегут враги: ')+uname(r.t,r.fac).toLowerCase())}
