@@ -6,6 +6,7 @@ import { moveArmy, recruit } from '../src/js/map.js';
 import { setAutoAnswer } from '../src/js/ui.js';
 import { str, garUnits, adj, P } from '../src/js/state.js';
 import { PLAYER, FACT, UT } from '../src/js/data.js';
+import { reliefStr } from '../src/js/war.js';
 
 setAutoAnswer((t, btns) => (btns.some(b => b[0] === 'war') ? 'war' : 'auto'));
 const N = Number(process.env.CAMPAIGNS || 100), MAX_TURNS = 80;
@@ -33,8 +34,8 @@ async function playerBot() {
     if (!p.army.some(u => UT[u.t].general)) continue;
     if (p.id === st.capOf(PLAYER) && p.army.length < 6) continue;
     const t = adj(p.id).map(P).filter(x => x.owner !== PLAYER)
-      .sort((a, b) => (str(a.army) + str(garUnits(a), 1.2)) - (str(b.army) + str(garUnits(b), 1.2)))[0];
-    if (!t || str(p.army) < 1.3 * (str(t.army) + str(garUnits(t), 1.2))) continue;
+      .sort((a, b) => (str(a.army) + str(garUnits(a), 1.2) + reliefStr(a)) - (str(b.army) + str(garUnits(b), 1.2) + reliefStr(b)))[0];
+    if (!t || str(p.army) < 1.3 * (str(t.army) + str(garUnits(t), 1.2) + reliefStr(t))) continue;
     G.sel = p.id; G.pick = new Set(p.army.map(u => u.id));
     await moveArmy(p, t);
     if (G.over) return;

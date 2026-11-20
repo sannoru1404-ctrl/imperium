@@ -34,6 +34,8 @@ export const FACT={
  cher:{n:'Чернигов',c:'#e09a7a',cult:'rus',cap:'chern',emblem:'☦'},
  polo:{n:'Полоцк',c:'#a87f6a',cult:'rus',cap:'polot',emblem:'☦'},
  cuman:{n:'Половцы',c:'#d6d29a',cult:'steppe',cap:'cum1',emblem:'🐎'},
+ teut:{n:'Тевтонский орден',c:'#2b2b2b',tc:'#e8e4dc',cult:'west',cap:null,emblem:'✠',event:1},
+ mong:{n:'Монгольская орда',c:'#4a2d6b',tc:'#c9b6e6',cult:'steppe',cap:null,emblem:'🏹',event:1},
  rebel:{n:'Независимые земли',c:'#8a8278',tc:'#d0c8bc',cult:'west'},
 };
 export function aiFactions(){return Object.keys(FACT).filter(f=>f!==PLAYER&&f!=='rebel')}
@@ -154,3 +156,44 @@ export const START_ALLIES=[['byz','ven'],['hre','boh'],['rus','pol']];
 export const START_TRADE=[['ven','sic'],['den','swe'],['novg','swe'],['eng','den'],['rus','byz']];
 export const SETTLE_COST=600;      // ×current level to grow a settlement
 export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.06,peaceChance:0.12,minWarYears:4};
+
+// ===================== VETERANS & GENERALS =====================
+// Units gain experience (0..3 stars) by surviving battles: each star +0.5 atk/def and +5 morale.
+export const XP_MAX=3;
+// Generals have a name, a rank (1..5) and traits. A new trait comes with every second rank.
+export const GEN_NAMES={
+ rus:['Мстислав','Ярополк','Всеволод','Изяслав','Ростислав','Святополк','Давыд','Олег','Глеб','Вячеслав','Андрей','Юрий'],
+ pol:['Болеслав','Збигнев','Мешко','Казимир','Владислав','Пётр Властович','Сецех','Генрих'],
+ west:['Готфрид','Балдуин','Роберт','Генрих','Вильгельм','Раймунд','Боэмунд','Танкред','Конрад','Фридрих','Гуго','Лотарь'],
+ steppe:['Коломан','Альмош','Бела','Ласло','Шарукан','Боняк','Кончак','Аепа'],
+ byz:['Алексей','Иоанн','Мануил','Никифор','Георгий Палеолог','Константин','Михаил','Андроник'],
+ islam:['Кылыч-Арслан','Афдаль','Юсуф ибн Ташфин','Али','Тугтегин','Рыдван','Зенги','Маудуд'],
+};
+export const TRAITS={
+ strat:{n:'Стратег',d:'Войско сильнее на 10% (и в авторасчёте)'},
+ brave:{n:'Храбрец',d:'Боевой дух всего войска +10, аура шире'},
+ siege:{n:'Мастер осад',d:'Ворота падают вдвое быстрее, город сдаётся на год раньше'},
+ swift:{n:'Быстрый',d:'Марш без усталости: можно идти и затем атаковать'},
+ thrift:{n:'Хозяйственный',d:'Содержание его войска −25%'},
+ coward:{n:'Трус',bad:1,d:'Боевой дух войска −10'},
+};
+export const GEN_XP=[0,2,5,9,14];   // battle points needed for ranks 1..5
+
+// ===================== ARMY STANCES =====================
+export const STANCES={
+ none:  {n:'Обычный',i:'▭',d:'Войско ходит и сражается как обычно.'},
+ camp:  {n:'Лагерь',i:'⛺',d:'Войско стоит и укрепляется: в обороне сильнее на 25%, полки встречают врага собранными.'},
+ march: {n:'Марш',i:'🏃',d:'По своим землям можно пройти два перехода за год. Напав после марша, войско начнёт бой уставшим.'},
+ ambush:{n:'Засада',i:'🌲',d:'Если враг нападёт на эту землю, он может (в половине случаев) попасть в засаду: начнёт бой в походной колонне и в смятении. Не работает в осаждённом городе.'},
+ raid:  {n:'Набег',i:'🔥',d:'Грабит соседнюю вражескую землю: забирает часть её дохода и подрывает порядок. Содержание войска вдвое меньше.'},
+};
+export const AMBUSH_CHANCE=0.5, RAID_SHARE=0.25;
+
+// ===================== EVENTS =====================
+// New powers enter the stage in a given year (turn = year − 1099).
+export const EVENTS=[
+ {turn:46,id:'teut',n:'Тевтонский орден',where:['pruss','livon','cour'],army:['gen','knight','knight','knight','druzh','druzh','xbow','xbow','spear','spear'],armies:2,
+  war:['rus','novg','polo','pol','lith'],text:'Рыцари Тевтонского ордена высадились в Прибалтике и несут крест мечом.'},
+ {turn:76,id:'mong',n:'Монгольская орда',where:['cum2','tmut','cum1','ryaz'],army:['gen','hasb','hasb','hasb','hasb','hasb','hasb','knight','knight','knight','spear','spear'],armies:3,
+  war:'all',text:'С востока пришла Орда. Тумены монголов сметают всё на своём пути.'},
+];

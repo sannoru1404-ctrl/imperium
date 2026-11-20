@@ -1,5 +1,5 @@
 // Campaign rules: income, upkeep, public order, buildings, decrees, technologies, generals.
-import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST } from './data.js';
+import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE } from './data.js';
 import { G, P, mk, addLog } from './state.js';
 import { rand } from './rng.js';
 import { tradeIncome } from './diplo.js';
@@ -82,6 +82,7 @@ export function orderOf(p){
  o+=Math.min(ORDER.maxGarrison,p.army.length*ORDER.perGarrison);
  const e=edictOf(f);if(e==='tax')o-=15;if(e==='peace')o+=15;
  if(hasTech(f,'civ3'))o+=10;
+ if(p.raided>0)o-=10;                 // plundered by raiders
  return Math.max(-100,Math.min(100,o));
 }
 
@@ -97,11 +98,18 @@ export function provIncome(p){
  if(hasTech(f,'civ1'))v*=1.1;
  const e=edictOf(f);if(e==='tax')v*=1.2;if(e==='peace')v*=0.95;
  if(orderOf(p)<ORDER.poorBelow)v*=0.5;
+ if(p.raided>0)v*=1-RAID_SHARE;
  return Math.round(v);
 }
 export function upkeepOf(f){
  let up=0;
- for(const p of G.prov)if(p.owner===f)for(const u of p.army)up+=UT[u.t].general?GEN_UPKEEP:UNIT_UPKEEP;
+ for(const p of G.prov)if(p.owner===f){
+  let a=0;for(const u of p.army)a+=UT[u.t].general?GEN_UPKEEP:UNIT_UPKEEP;
+  const g=p.army.find(u=>UT[u.t].general&&u.g);
+  if(g&&g.g.traits.includes('thrift'))a*=0.75;      // a thrifty general
+  if(g&&p.stance==='raid')a*=0.5;                    // raiders live off the land
+  up+=a;
+ }
  return Math.round(up*(hasTech(f,'mil4')?0.75:1));
 }
 export function income(f){

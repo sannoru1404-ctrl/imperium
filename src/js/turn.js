@@ -6,6 +6,7 @@ import { alive, tactical } from './battle-sim.js';
 import { modal, closeModal, ask } from './ui.js';
 import { rand } from './rng.js';
 import { aiDiplomacy, atWar, declareWar, rel } from './diplo.js';
+import { reliefStr, gatherReinforcements, reinfText, afterBattle, stanceMods, stanceOf, aiStances, raids, runEvents, eventSupply, nameGenerals, makeGeneral, EVENT_AGGR, isGen } from './war.js';
 import { yearlyUpdate, garMax, aiEconomy, unitAvailable, unitCost, generals, maxGenerals, wallLevel, hasTech } from './rules.js';
 
 // ===================== TURN =====================
@@ -20,9 +21,11 @@ export async function endTurn(){
  }
  // new turn
  G.turn++;
+ raids();
  for(const f in G.fac){if(f==='rebel')continue;G.fac[f].gold=Math.max(0,G.fac[f].gold+income(f).net)}
  G.prov.forEach(p=>{
-  p.moved=false;p.rec=0;
+  p.moved=false;p.rec=0;p.mstep=0;
+  if(!p.army.some(isGen))p.stance='none';
   if(p.gar<garMax(p)&&G.turn%2===0)p.gar++;
   if(p.occ>0)p.occ--;
   // independent lands slowly raise their own warband
@@ -31,6 +34,7 @@ export async function endTurn(){
  });
  sieges();
  yearlyUpdate();
+ eventSupply();runEvents();nameGenerals();
  if(G.fac[PLAYER].gold===0&&income(PLAYER).net<0){const p=G.prov.find(p=>p.owner===PLAYER&&p.army.length);if(p){p.army.pop();addLog('Казна пуста — один отряд дезертировал!')}}
  G.busy=false;$('endBtn').disabled=false;
  checkEnd();save();render();
@@ -65,11 +69,11 @@ export async function aiTurn(f){
    if(!t)break;
    const reserve=G.turn<4?0:150;
    if(F.gold<unitCost(f,t)+reserve||income(f).net<40)break;
-   F.gold-=unitCost(f,t);p.army.push(mk(t));p.rec++;
+   F.gold-=unitCost(f,t);const u=mk(t);makeGeneral(u,f);p.army.push(u);p.rec++;
   }
  }
  // moves
- const aggr=AI.aggressive[f]||AI.attackRatio;
+ const aggr=AI.aggressive[f]||(FACT[f].event?EVENT_AGGR:AI.attackRatio);
  let attacks=0;
  for(const p of mine()){
   if(!p.army.length||p.moved||p.owner!==f)continue;
@@ -82,7 +86,7 @@ export async function aiTurn(f){
   let best=null,bs=0;
   adj(p.id).forEach(a=>{const t=P(a);if(t.owner===f)return;
    if(t.owner!=='rebel'&&!atWar(f,t.owner))return;
-   const ds=str(t.army)+str(garUnits(t),1.2)+0.1;let r=s/ds;
+   const ds=str(t.army)+str(garUnits(t),1.2)+reliefStr(t)+0.1;let r=s/ds;
    if(t.owner===PLAYER){if(G.turn<AI.playerGraceTurns)return;r*=AI.playerBias}
    else if(t.owner!=='rebel')r*=aggr/AI.majorRatio;
    if(r>bs){bs=r;best=t}});
@@ -96,7 +100,7 @@ export async function aiTurn(f){
    sorted.unshift(...gens.slice(0,1));stay.push(...gens.slice(1));
    const units=sorted;
    const sm=siegeMods(best,f);
-   const ds=str(best.army)*sm[1]+str(garUnits(best),sm[0])+0.1;
+   const ds=str(best.army)*sm[1]*(stanceOf(best)==='camp'?1.25:1)+str(garUnits(best),sm[0])+reliefStr(best)+0.1;
    if(!units.length)continue;
    if(str(units)/ds<=aggr){
     // walls too strong to storm: blockade the town instead and starve it out
@@ -113,6 +117,7 @@ export async function aiTurn(f){
    if(step&&step.army.length+p.army.length<=MAX_ARMY){step.army.push(...p.army);p.army=[];step.moved=true}
   }
  }
+  aiStances(f);
 }
 export function pathToBorder(start,f){
  const q=[[start.id,null]],seen=new Set([start.id]);
@@ -123,16 +128,20 @@ export function pathToBorder(start,f){
 }
 export async function aiAttack(from,to,f,units){
  const def=[...to.army,...garUnits(to)];
+ const att=[...units];
+ const reinf=gatherReinforcements(from,to,f,att,def);
+ if(!def.length){const pl=to.owner===PLAYER;if(pl){G.sel=to.id}capture(to,f,units);if(pl){render();await sleep(500);G.sel=null;checkEnd()}return}
+ const sm=siegeMods(to,f);
+ const [am,dm,amb,tired]=stanceMods(from,to,att);
  if(to.owner===PLAYER){
   G.sel=to.id;render();
-  if(!def.length){capture(to,f,units);render();await sleep(500);checkEnd();return}
-  const ch=await ask(`⚠ ${FACT[f].n} атакуют!`,`<p>Враг вторгся в провинцию <b>${to.n}</b>.</p><p>Враг: <b>${Math.round(str(units))}</b> (${units.length} отр.)</p><p>Твоя оборона: <b>${Math.round(str(to.army)+str(garUnits(to),1.2))}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>`,
+  const ch=await ask(`⚠ ${FACT[f].n} атакуют!`,`<p>Враг вторгся в провинцию <b>${to.n}</b>.</p><p>Враг: <b>${Math.round(str(att))}</b> (${att.length} отр.)</p>${reinfText(reinf,'att')}<p>Твоя оборона: <b>${Math.round(str(def.filter(u=>!u.gar))+str(garUnits(to),1.2))}</b> (${def.length-to.gar} отр. + ${to.gar} ополч.)</p>${reinfText(reinf,'def')}${amb?'<p>🌲 <b>Враг угодил в засаду!</b></p>':''}`,
    [['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт']]);
-  const res=ch==='fight'?await tactical(units,def,f,PLAYER,'def',to.n,siegeOpts(to,f)):autoResolve(units,def,...siegeMods(to,f));
+  const res=ch==='fight'?await tactical(att,def,f,PLAYER,'def',to.n,siegeOpts(to,f),{ambush:amb,camp:dm>1,tired}):autoResolve(att,def,sm[0],sm[1]*dm,am);
+  afterBattle(res,reinf);
   applyBattle(from,to,f,res);G.sel=null;render();checkEnd();
  } else {
-  if(!def.length){capture(to,f,units);return}
-  const res=autoResolve(units,def,...siegeMods(to,f));applyBattle(from,to,f,res);
+  const res=autoResolve(att,def,sm[0],sm[1]*dm,am);afterBattle(res,reinf);applyBattle(from,to,f,res);
  }
 }
 // walls make the garrison and the defending army stronger; siege engineering (tech) cancels part of it
@@ -166,8 +175,8 @@ export function siegeMods(to,attacker){
  const w=Math.max(0,wallLevel(to)-(hasRam(to,attacker)?0.6:0));
  return [1+(0.2+0.3*w)*k,1+0.15*w*k];
 }
-export function autoResolve(att,def,garBonus,defMult=1){
- const sa=str(att)*rnd(.85,1.15), sd=(str(def.filter(u=>!u.gar))*defMult+str(def.filter(u=>u.gar),garBonus))*rnd(.85,1.15);
+export function autoResolve(att,def,garBonus,defMult=1,attMult=1){
+ const sa=str(att)*attMult*rnd(.85,1.15), sd=(str(def.filter(u=>!u.gar))*defMult+str(def.filter(u=>u.gar),garBonus))*rnd(.85,1.15);
  const win=sa>=sd?'att':'def';
  const W=win==='att'?att:def, L=win==='att'?def:att;
  const ratio=Math.min(sa,sd)/Math.max(sa,sd);

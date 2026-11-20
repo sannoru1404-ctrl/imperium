@@ -7,6 +7,8 @@ import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
 import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost } from './rules.js';
 import { B, tactical } from './battle-sim.js';
 import { modal, closeModal, ask, toast } from './ui.js';
+import { STANCES, TRAITS } from './data.js';
+import { gatherReinforcements, reinfText, afterBattle, stanceOf, setStanceOf, stanceMods, genLabel, stars, makeGeneral, isGen } from './war.js';
 
 // ===================== MAP RENDER =====================
 // Layers: static geography (built once) → territory cells → dynamic (routes, regions, armies).
@@ -106,7 +108,7 @@ export function drawMap(){
   ${p.siege?`<text x="${p.x-r-10}" y="${p.y-r}" font-size="14">⛺</text>`:''}
   ${cap?`<text x="${p.x}" y="${p.y+4.5}" text-anchor="middle" font-size="12">👑</text>`:p.lvl>=3?`<text x="${p.x}" y="${p.y+4}" text-anchor="middle" font-size="10">🏰</text>`:''}
   <text class="lbl" x="${p.x}" y="${p.y+r+14}" text-anchor="middle" font-size="13" font-family="PT Serif" font-weight="700" fill="#fff" stroke="#1a120a" stroke-width="3" paint-order="stroke">${p.n}</text>`;
-  if(p.army.length)s+=`<g transform="translate(${p.x+r-2},${p.y-r-12})"><rect width="24" height="14" rx="3" fill="#1a120a" stroke="${c}" stroke-width="1.5"/><text x="12" y="10.5" text-anchor="middle" font-size="10" fill="${p.moved&&p.owner===PLAYER?'#888':'#fff'}" font-weight="700">⚔${p.army.length}</text></g>`;
+  if(p.army.length)s+=`<g transform="translate(${p.x+r-2},${p.y-r-12})"><rect width="24" height="14" rx="3" fill="#1a120a" stroke="${c}" stroke-width="1.5"/><text x="12" y="10.5" text-anchor="middle" font-size="10" fill="${p.moved&&p.owner===PLAYER?'#888':'#fff'}" font-weight="700">⚔${p.army.length}</text>${stanceOf(p)!=='none'?`<text x="30" y="11" font-size="11">${STANCES[stanceOf(p)].i}</text>`:''}</g>`;
   s+=`</g>`;
  });
  const dyn=$('mDyn');if(dyn)dyn.innerHTML=s;
@@ -133,8 +135,11 @@ export function drawPanel(){
    h+=`<div style="margin-top:6px">`;
    if(own&&p.besiege)h+=`<div class="small" style="color:#e0b34a">⛺ Войско осаждает ${P(p.besiege).n}. Нажми на город, чтобы штурмовать. <a href="#" style="color:var(--gold)" onclick="event.preventDefault();liftSiege()">Снять осаду</a></div>`;
    else if(own)h+=`<div class="small">${p.moved?'Войско уже ходило в этом году.':gen?'Выбери отряды для похода и нажми на соседнюю землю:':'Без воеводы войско ходит только по своим землям.'}</div>`;
-   p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${uname(u.t,p.owner)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
-   h+=`</div><div class="small" style="margin-top:4px">Сила войска: ${Math.round(str(p.army))}${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
+   p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${u.g?u.g.name:uname(u.t,p.owner)}${stars(u)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
+   const gu=p.army.find(u=>isGen(u)&&u.g);
+   if(gu)h+=`<div class="small" style="margin-top:4px">👑 Воевода ${genLabel(gu)}${gu.g.traits.length?'':' · черт нет'} <span style="opacity:.7">(опыт ${gu.g.xp})</span></div>`;
+   h+=`</div><div class="small" style="margin-top:4px">Сила войска: ${Math.round(str(p.army))}${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}${stanceOf(p)!=='none'?` · ${STANCES[stanceOf(p)].i} ${STANCES[stanceOf(p)].n}`:''}</div>`;
+   if(own&&gen&&!p.besiege)h+=`<div class="row stances" style="margin-top:6px;gap:4px">${Object.keys(STANCES).map(k=>`<button class="${stanceOf(p)===k?'on pri':''}" style="padding:4px 7px;font-size:12px" title="${STANCES[k].d}" onclick="setStance('${k}')">${STANCES[k].i} ${STANCES[k].n}</button>`).join('')}</div>`;
   } else h+=`<div class="small" style="margin-top:6px">Войска нет. Гарнизон: ${p.gar} ополч.${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
   if(own){
    const upc=SETTLE_COST*p.lvl;
@@ -177,9 +182,12 @@ export async function moveArmy(from,to){
  if(to.owner===PLAYER){
   if(to.army.length+units.length>MAX_ARMY){toast(`В войске не больше ${MAX_ARMY} отрядов.`);return}
   if(units.some(u=>UT[u.t].general)&&to.army.some(u=>UT[u.t].general)){toast('В одной армии может быть только один воевода.');return}
+  const march=stanceOf(from)==='march'&&units.some(isGen)&&!(from.mstep>0);
   from.army=from.army.filter(u=>!G.pick.has(u.id));
-  to.army.push(...units);to.moved=true;
-  G.sel=to.id;G.pick=new Set();addLog(`Армия перешла в ${to.n}.`);render();return;
+  to.army.push(...units);
+  if(march){to.moved=false;to.mstep=1;to.stance='march'}else{to.moved=true;to.mstep=from.mstep>0||stanceOf(from)==='march'?2:0;to.stance=to.mstep?'march':'none'}
+  if(!from.army.some(isGen)){from.stance='none';from.mstep=0}
+  G.sel=to.id;G.pick=new Set();addLog(march?`Армия маршем вошла в ${to.n} — можно идти дальше.`:`Армия перешла в ${to.n}.`);render();return;
  }
  if(!units.some(u=>UT[u.t].general)){toast('В поход на чужие земли войско идёт только с воеводой.');return}
  if(to.owner!=='rebel'&&!atWar(PLAYER,to.owner)){
@@ -189,25 +197,31 @@ export async function moveArmy(from,to){
   declareWar(PLAYER,to.owner);
  }
  const def=[...to.army,...garUnits(to)];
+ const att=[...units];
+ const reinf=gatherReinforcements(from,to,PLAYER,att,def);
  if(!def.length){from.army=from.army.filter(u=>!G.pick.has(u.id));capture(to,PLAYER,units);G.sel=to.id;G.pick=new Set();render();checkEnd();return}
  const sm=siegeMods(to,PLAYER);
- const sa=Math.round(str(units)),sd=Math.round(str(to.army)*sm[1]+str(garUnits(to),sm[0]));
+ const sa=Math.round(str(att)),sd=Math.round(str(def.filter(u=>!u.gar))*sm[1]+str(garUnits(to),sm[0]));
+ const tired=from.mstep>0;
  const w=wallLevel(to),ram=hasRam(to,PLAYER);
  const wallTxt=w?`<p>🧱 ${w>1?'Каменные':'Деревянные'} стены. ${ram?'Таран готов — ворота падут быстро.':to.siege&&to.siege.f===PLAYER?'Таран будет готов через год осады.':'Можно штурмовать по лестницам или осадить: через год будет таран, а через '+(2+w)+' года город сдастся от голода.'}</p>`:'';
- const ch=await ask(`${w?'Город':'Битва за'} ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${units.length} отр.)</p><p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>${wallTxt}${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
+ const ch=await ask(`${w?'Город':'Битва за'} ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${att.length} отр.)</p>${reinfText(reinf,'att')}<p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${def.length-to.gar} отр. + ${to.gar} ополч.)</p>${reinfText(reinf,'def')}${stanceOf(to)==='camp'?'<p class="small">⛺ Враг стоит лагерем: в обороне сильнее.</p>':''}${tired?'<p class="small">🏃 Войско устало после марша.</p>':''}${wallTxt}${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
   w?[['fight',ram?'⚔ Штурм с тараном':'⚔ Штурм по лестницам',1],['auto','🎲 Авторасчёт штурма'],...(to.siege?[]:[['siege','⛺ Осадить']]),['no','Отмена']]
    :[['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт'],['no','Отмена']]);
  if(ch==='no')return;
  if(ch==='siege'){startSiege(from,to,PLAYER);G.pick=new Set();render();return}
  from.army=from.army.filter(u=>!G.pick.has(u.id));
  G.pick=new Set();
- const res=ch==='fight'?await tactical(units,def,PLAYER,to.owner,'att',to.n,siegeOpts(to,PLAYER)):autoResolve(units,def,...sm);
+ const [am,dm,amb,tr]=stanceMods(from,to,att);
+ if(amb)await ask('🌲 Засада!',`<p>Враг ждал в засаде у ${to.n}! Войско в смятении и вступает в бой в походной колонне.</p>`,[['ok','К бою!',1]]);
+ const res=ch==='fight'?await tactical(att,def,PLAYER,to.owner,'att',to.n,siegeOpts(to,PLAYER),{ambush:amb,camp:dm>1,tired:tr}):autoResolve(att,def,sm[0],sm[1]*dm,am);
+ afterBattle(res,reinf);
  applyBattle(from,to,PLAYER,res);
  G.sel=to.owner===PLAYER?to.id:from.id;
  render();checkEnd();
 }
 export function capture(p,f,units){
- const old=p.owner;p.owner=f;p.army=units;p.gar=1;p.moved=true;p.occ=AI.occupationTurns;
+ const old=p.owner;p.owner=f;p.army=units;p.gar=1;p.moved=true;p.occ=AI.occupationTurns;p.stance='none';p.mstep=0;
  addLog(`${FACT[f].n}: захвачена провинция ${p.n}!`);
  if(old!=='rebel'&&capOf(old)===p.id){
   // the capital moves to the richest remaining land
@@ -264,10 +278,15 @@ export function recruit(t){
  const p=P(G.sel),d=UT[t],cost=unitCost(PLAYER,t);
  if(G.fac[PLAYER].gold<cost||p.army.length>=MAX_ARMY||p.rec>=p.lvl||!unitAvailable(p,t)&&!d.general&&t!=='mil')return;
  if(d.general&&(p.army.some(u=>UT[u.t].general)||generals(PLAYER)>=maxGenerals(PLAYER)))return;
- G.fac[PLAYER].gold-=cost;p.rec++;const u=mk(t);p.army.push(u);G.pick.add(u.id);
+ G.fac[PLAYER].gold-=cost;p.rec++;const u=mk(t);makeGeneral(u,PLAYER);p.army.push(u);G.pick.add(u.id);
  closeModal();addLog(`Нанят отряд: ${uname(t,PLAYER)} (${p.n}).`);render();
  if(p.army.length<MAX_ARMY&&p.rec<p.lvl)openRecruit();
 }
 export function upgrade(){const p=P(G.sel),c=SETTLE_COST*p.lvl;if(G.fac[PLAYER].gold<c||p.lvl>=3)return;G.fac[PLAYER].gold-=c;p.lvl++;addLog(`${p.n} отстраивается (ур. ${p.lvl}).`);render()}
 
 export function liftSiege(){const p=P(G.sel);if(!p||!p.besiege)return;const t=P(p.besiege);if(t)t.siege=null;p.besiege=null;addLog(`Осада ${t?t.n:''} снята.`);render()}
+
+export function setStance(k){
+ const p=P(G.sel);if(!p||p.owner!==PLAYER||!p.army.some(isGen)||!STANCES[k])return;
+ setStanceOf(p,k);toast(`${STANCES[k].i} ${STANCES[k].n}: ${STANCES[k].d}`);render();
+}

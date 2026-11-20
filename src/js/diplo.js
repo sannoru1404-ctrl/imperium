@@ -36,7 +36,8 @@ export function declareWar(a,b){
  } else if(b===PLAYER){G.att[a]=Math.min(G.att[a]||0,-30);addLog(`⚔ ${FACT[a].n} объявляет тебе войну!`)}
  else if(borders(a,PLAYER)||borders(b,PLAYER))addLog(`${FACT[a].n} объявляет войну: ${FACT[b].n}.`);
 }
-export function makePeace(a,b){if(!atWar(a,b))return;setRel(a,b,'peace');
+export function makePeace(a,b){if(!atWar(a,b)||a==='mong'||b==='mong')return;  // the Horde knows no peace
+setRel(a,b,'peace');
  if(a===PLAYER||b===PLAYER)addLog(`🕊 Мир с ${FACT[a===PLAYER?b:a].n}.`)}
 
 export function tradeIncome(f){
@@ -51,6 +52,7 @@ export function proposal(f,kind){
  const a=G.att[f]||0,me=power(PLAYER),them=power(f),r=rel(PLAYER,f);
  if(kind==='peace'){
   if(r!=='war')return [false,'Вы не воюете.'];
+  if(f==='mong')return [false,'Орда не знает мира.'];
   const yrs=since(PLAYER,f);
   const score=a+40*(me/Math.max(1,them)-1)+6*yrs-10;
   return score>0?[true,'']:[false,yrs<2?'Слишком рано: война только началась.':'Они надеются победить.'];
@@ -98,7 +100,7 @@ export function aiDiplomacy(){
    if(r==='war'){
     // tired or losing wars end in peace
     if(since(a,b)>=DIPLO.minWarYears&&b!==PLAYER&&rand()<DIPLO.peaceChance)makePeace(a,b);
-    if(b===PLAYER&&since(a,b)>=DIPLO.minWarYears+2&&pa<pb*0.7&&rand()<DIPLO.peaceChance){
+    if(b===PLAYER&&a!=='mong'&&since(a,b)>=DIPLO.minWarYears+2&&pa<pb*0.7&&rand()<DIPLO.peaceChance){
      addLog(`🕊 ${FACT[a].n} предлагают мир — открой «Дипломатию».`);G.att[a]+=15}
    } else {
     // a much stronger neighbour may start a war; the player is attacked only if they are disliked

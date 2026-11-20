@@ -3,6 +3,7 @@ import { FACT, UT, PROV_DEF, ADJ, START_ARMY, START_ARMY_CULT, START_GOLD, PLAYE
 import { $ } from './util.js';
 import { render } from './map.js';
 import { initDiplo } from './diplo.js';
+import { genMult, nameGenerals } from './war.js';
 
 export let G=null; // game state
 export let uid=1;
@@ -41,12 +42,13 @@ export function newGame(gameSeed,faction){
   if(p.owner==='rebel'&&p.tier>=2)START_ARMY.rebelBig.forEach(t=>p.army.push(mk(t)));
  });
  initDiplo();
+ G.ev={};nameGenerals();
  $('title').style.display='none';
  addLog(`Лето ${START_YEAR}-е. ${FACT[PLAYER].n}: ${FACT[PLAYER].d||'собирай земли'}`);
  render(true);
 }
 // ---------- saves: 3 manual slots + autosave, versioned ----------
-export const SAVE_VER=3; // v3: grand campaign map of Europe (older saves are not compatible)
+export const SAVE_VER=4; // v4: generals, veterans, stances, events (older saves are not compatible)
 export const SLOTS=['auto','1','2','3'];
 const key=slot=>'imperium_v'+SAVE_VER+'_'+slot;
 export function saveSlot(slot='auto'){
@@ -72,7 +74,7 @@ export function loadGame(){if(!loadSlot('auto'))newGame()}
 
 export function addLog(t){G.log.unshift(t);G.log=G.log.slice(0,4);}
 export { provIncome, income } from './rules.js';
-export function str(units,bonus=1){return units.reduce((s,u)=>{const d=UT[u.t];return s+(d.atk+d.def+(d.range?2:0)+(d.mov>2?2:0)+(d.general?3:0))*u.hp/100},0)*bonus}
+export function str(units,bonus=1){return units.reduce((s,u)=>{const d=UT[u.t];return s+(d.atk+d.def+(d.range?2:0)+(d.mov>2?2:0)+(d.general?3:0))*u.hp/100*(1+0.06*(u.xp||0))},0)*bonus*genMult(units)}
 export function garUnits(p){const a=[];for(let i=0;i<p.gar;i++){const u=mk('mil');u.gar=true;a.push(u)}return a}
 
 export function nextId(){return uid++}

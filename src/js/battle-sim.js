@@ -29,8 +29,8 @@ export function Hgt(x,z){
 }
 
 export function makeReg(o,side,x,z,fac){
- const d=UT[o.t];const body=bodyOf(o.t);
- const r={id:nextId(),o,t:o.t,side,fac,defB:hasTech(fac,'mil1')?1:0,chT:hasTech(fac,'mil2')?1.2:1,men:o.hp,start:Math.max(o.hp,1),morale:100,stam:100,x,z,face:side==='p'?Math.PI:0,
+ const d=UT[o.t];const body=bodyOf(o.t);const xp=o.xp||0;
+ const r={id:nextId(),o,t:o.t,side,fac,xpB:0.5*xp,defB:(hasTech(fac,'mil1')?1:0)+0.5*xp,chT:hasTech(fac,'mil2')?1.2:1,men:o.hp,start:Math.max(o.hp,1),morale:100+5*xp,stam:100,x,z,face:side==='p'?Math.PI:0,
   order:null,state:'idle',chargeT:0,idleT:5,braceT:0,cool:rand()*2,fled:false,dead:false,routing:false,inForest:false,
   spd:SPD[d.mov]||5,ranged:!!d.range,range:d.range||0,ammo:d.ammo||0,cav:d.mov>2,gen:!!d.general,skirmish:!!d.skirmish,
   form:d.charge&&d.forms&&d.forms.includes('wedge')?'wedge':'line',body,figs:[],bannerKey:''};
@@ -48,7 +48,7 @@ export function formation(r){
 export function canForm(r,f){return f==='line'||(UT[r.t].forms||[]).includes(f)}
 export function setForm(r,f){if(canForm(r,f))r.form=f}
 
-export function setupBattle(att,def,af,df,playerSide,place,battleSeed,siege){
+export function setupBattle(att,def,af,df,playerSide,place,battleSeed,siege,mods){
  const pu=playerSide==='att'?att:def, eu=playerSide==='att'?def:att;
  // the battle runs on its own seed, so it can be replayed; the campaign stream is restored afterwards
  const rngSeed=(battleSeed??Math.floor(rand()*4294967296))>>>0, campRng=getState();seed(rngSeed);
@@ -83,8 +83,32 @@ export function setupBattle(att,def,af,df,playerSide,place,battleSeed,siege){
   gen.forEach((u,i)=>B.regs.push(makeReg(u,side,i*14,66*zs,fac)));
  };
  deploy(pu,'p',B.pf);deploy(eu,'e',B.ef);
+ applyMods(mods||{});
  B.init={p:0,e:0};B.cur={p:0,e:0};
  B.regs.forEach(r=>{B.init[r.side]+=r.men});
+}
+
+// generals' traits, ambush, camp and fatigue
+function applyMods(mods){
+ const attS=B.playerSide==='att'?'p':'e', defS=attS==='p'?'e':'p';
+ B.sideM={p:1,e:1};B.siegeM={p:false,e:false};
+ for(const s of ['p','e']){
+  const g=B.regs.find(r=>r.side===s&&r.gen&&r.o.g);if(!g)continue;
+  const T=g.o.g.traits;
+  B.sideM[s]=1+0.03*(g.o.g.rank-1)+(T.includes('strat')?0.1:0);
+  if(T.includes('siege'))B.siegeM[s]=true;
+  if(T.includes('brave'))g.brave=true;
+  const dm=(T.includes('brave')?10:0)-(T.includes('coward')?10:0);
+  if(dm)B.regs.forEach(r=>{if(r.side===s)r.morale+=dm});
+ }
+ if(mods.ambush){
+  // caught on the march: a long column, shaken
+  const col=B.regs.filter(r=>r.side===attS);
+  col.forEach((r,i)=>{r.x=(Math.floor(i/10)%2?12:-12)+(i%2?3:-3);r.z=(attS==='p'?1:-1)*(28+(i%10)*8);r.face=attS==='p'?Math.PI/2:-Math.PI/2;r.morale-=20;r.stam=Math.min(r.stam,80)});
+  B.ambush=true;
+ }
+ if(mods.tired)B.regs.forEach(r=>{if(r.side===attS)r.stam=Math.min(r.stam,60)});
+ if(mods.camp)B.regs.forEach(r=>{if(r.side===defS){r.defB+=1;r.braceT=Math.max(r.braceT,8)}});
 }
 
 // ---------- helpers ----------
@@ -123,7 +147,7 @@ function wallMove(r,tx,tz,dt,mult){
   if(!r.ranged){                                          // batter the gate
    if(gd>2){basicMove(r,0,W+s0*4,dt,mult);return false}
    r.wst='bash';turnTo(r,0,W-s0*5,dt,6);
-   S.gateHp-=dt*(0.4+0.6*r.men/100)*(S.ram?4:1.5);
+   S.gateHp-=dt*(0.4+0.6*r.men/100)*(S.ram?4:1.5)*(B.siegeM&&B.siegeM[r.side]?2:1);
    if(S.gateHp<=0&&!S.open){S.open=true;S.gateHp=0;msg('🚪 Ворота выбиты!')}
    return false;
   }
@@ -148,7 +172,7 @@ export function moveTo(r,tx,tz,dt,mult=1){
  r.x+=ux*s;r.z+=uz*s;turnTo(r,tx,tz,dt,6);return d<=s+0.4;
 }
 export function hasAura(r){
- return B.regs.some(g=>g.gen&&g!==r&&g.side===r.side&&alive(g)&&!g.routing&&rdist(g,r)<AURA_R);
+ return B.regs.some(g=>g.gen&&g!==r&&g.side===r.side&&alive(g)&&!g.routing&&rdist(g,r)<AURA_R*(g.brave?1.4:1));
 }
 function frontal(b,a){const [fx,fz]=fwd(b);const vx=a.x-b.x,vz=a.z-b.z,vl=Math.hypot(vx,vz)||1;return (fx*vx+fz*vz)/vl}
 function heightMult(a,b){return 1+clamp((Hgt(a.x,a.z)-Hgt(b.x,b.z))*0.04,-0.15,0.2)}
@@ -156,7 +180,7 @@ function moraleHit(b,amount){b.morale-=amount*(hasAura(b)?0.75:1)}
 
 export function meleeHit(a,b,dt,burst){
  const da=UT[a.t],db=UT[b.t];
- const atk=(da.range?da.atk*0.5:da.atk)*fatigue(a);let mult=1;
+ const atk=((da.range?da.atk*0.5:da.atk)+a.xpB)*fatigue(a)*(B.sideM?B.sideM[a.side]:1);let mult=1;
  if(da.antiCav&&b.cav)mult*=da.antiCav;
  if(a.cav&&db.range&&b.body==='inf')mult*=1.5;     // horsemen ride down archers
  if(b.routing)mult*=2;
@@ -187,7 +211,7 @@ export function fire(a,b){
  a.cool=(da.reload||3.2)*(0.9+rand()*0.2);
  a.ammo--;if(a.ammo<=0){a.ranged=false;a.skirmish=false;if(a.side==='p')msg('Кончились стрелы: '+uname(a.t,a.fac).toLowerCase())}
  let def=(db.def+b.defB)*(1-(da.ap||0));
- let dmg=6.5*da.atk*fatigue(a)*heightMult(a,b)/Math.max(1,def)*(0.35+0.65*a.men/a.start);
+ let dmg=6.5*(da.atk+a.xpB)*(B.sideM?B.sideM[a.side]:1)*fatigue(a)*heightMult(a,b)/Math.max(1,def)*(0.35+0.65*a.men/a.start);
  if(b.inForest)dmg*=0.5;
  const dot=frontal(b,a);
  if(dot>0.35&&b.body==='inf'&&!b.ranged)dmg*=b.form==='wall'?0.5:0.75; // shields
@@ -393,21 +417,23 @@ export function aiThink(){
 export function msg(t){if(!B)return;B.msgs.push({t,life:3.5});if(B.msgs.length>3)B.msgs.shift()}
 
 // ---------- start / finish ----------
-export function tactical(att,def,af,df,playerSide,place,siege){
+export function tactical(att,def,af,df,playerSide,place,siege,mods){
  return new Promise(resolve=>{
-  setupBattle(att,def,af,df,playerSide,place,undefined,siege);
+  setupBattle(att,def,af,df,playerSide,place,undefined,siege,mods);
   B.resolve=resolve;
   let ok=false;
   try{ok=initScene()}catch(e){console.error(e);ok=false}
   if(!ok){
    cleanupScene();
-   setState(B.campRng);const res=siege&&siege.wall?autoResolve(att,def,1+0.5*siege.wall,1+0.15*siege.wall):autoResolve(att,def,1.2);B=null;
+   const am=mods&&mods.ambush?0.8:mods&&mods.tired?0.9:1, dm=mods&&mods.camp?1.25:1;
+   setState(B.campRng);const res=siege&&siege.wall?autoResolve(att,def,1+0.5*siege.wall,(1+0.15*siege.wall)*dm,am):autoResolve(att,def,1.2,dm,am);B=null;
    ask('3D недоступно','<p>Не удалось запустить 3D на этом устройстве — битва рассчитана автоматически.</p>',[['ok','Далее',1]]).then(()=>resolve(res));
    return;
   }
   $('battle').style.display='block';
   $('bTitle').textContent='⚔ '+place;
   onResize();
+  if(B.ambush)msg(playerSide==='att'?'🌲 Засада! Войско растянуто в колонну — перестраивайся!':'🌲 Враг попал в засаду! Бей, пока он в колонне!');
   msg(B.siege?(playerSide==='att'?'Штурм! Пехота полезет на стены, у ворот — бей ворота. Жми ▶':'Враг штурмует город! Держи стены. Жми ▶'):playerSide==='att'?'Ты атакуешь. Расставь войска и жми ▶':'Враг наступает! Расставь войска и жми ▶');
   buildCards();updateHud();
   B.last=performance.now();B.raf=requestAnimationFrame(loop);

@@ -5,7 +5,7 @@ import { S3 } from './battle-3d.js';
 
 // ---------- HUD ----------
 export function buildCards(){
- $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div><div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div><div class="cb"><i class="st"></i></div></div>`).join('');
+ $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div>${r.o.xp?`<div style="position:absolute;top:1px;right:3px;font-size:8px;color:#ffd84a">${'★'.repeat(r.o.xp)}</div>`:''}${r.o.g?`<div style="position:absolute;top:1px;left:3px;font-size:8px;color:#ffd84a">${r.o.g.rank}</div>`:''}<div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div><div class="cb"><i class="st"></i></div></div>`).join('');
 }
 export function cardTap(id){
  const r=B.regs.find(x=>x.id===id);if(!r||!alive(r)||r.routing)return;
@@ -22,7 +22,7 @@ export function updateHud(){
  $('bMsg').innerHTML=B.msgs.map(m=>`<div style="opacity:${Math.min(1,m.life)}">${m.t}</div>`).join('');
  B.regs.filter(r=>r.side==='p').forEach(r=>{const c=$('card'+r.id);if(!c)return;
   c.classList.toggle('sel',B.sel.has(r));c.classList.toggle('gone',!alive(r)||r.routing);
-  c.querySelector('.m').style.width=Math.max(0,r.men)+'%';c.querySelector('.mo').style.width=Math.max(0,r.morale)+'%';c.querySelector('.st').style.width=r.stam+'%';
+  c.querySelector('.m').style.width=Math.max(0,r.men)+'%';c.querySelector('.mo').style.width=Math.min(100,Math.max(0,r.morale))+'%';c.querySelector('.st').style.width=r.stam+'%';
   c.querySelector('.ci').textContent=r.routing?'🏳️':!alive(r)?'☠':UT[r.t].i+(r.form!=='line'?FORMS[r.form].i:'');});
  const sel=[...B.sel];
  const stamWord=v=>v>=75?'свежие':v>=50?'бодрые':v>=25?'устали':'измотаны';
