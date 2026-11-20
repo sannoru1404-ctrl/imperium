@@ -17,8 +17,9 @@ if (st.G.turn !== turn || JSON.stringify(st.G.prov) !== snap) throw new Error('l
 await endTurn(); const a = JSON.stringify(st.G.prov);
 st.loadSlot('2'); await endTurn(); const b = JSON.stringify(st.G.prov);
 if (a !== b) throw new Error('replay after load differs');
-// migration of the pre-slot format
+// saves from the old Roman version (format v1 and the pre-slot format) are ignored, not loaded broken
 localStorage.clear();
 localStorage.setItem('imperium_save', JSON.stringify({ G: { ...st.G, pick: [] }, uid: 500 }));
-if (!st.readSlot('auto')) throw new Error('old save not migrated');
-console.log('saves: ok (slot save/load, deterministic continue, v0 migration)');
+localStorage.setItem('imperium_v1_auto', JSON.stringify({ v: 1, G: { ...st.G, pick: [] }, uid: 500 }));
+if (st.readSlot('auto')) throw new Error('old-format save should be ignored');
+console.log('saves: ok (slot save/load, deterministic continue, old formats ignored)');

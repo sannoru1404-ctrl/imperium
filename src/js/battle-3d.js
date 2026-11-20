@@ -20,22 +20,28 @@ export function box(w,h,d,x,y,z,rx){const g=new THREE.BoxGeometry(w,h,d);if(rx)g
 export function sph(r,x,y,z,half){const g=half?new THREE.SphereGeometry(r,8,5,0,Math.PI*2,0,Math.PI/2):new THREE.SphereGeometry(r,8,6);g.translate(x||0,y||0,z||0);return g}
 export function cyl(r,h,x,y,z){const g=new THREE.CylinderGeometry(r,r,h,5);g.translate(x||0,y||0,z||0);return g}
 
+function cone(r,h,x,y,z){const g=new THREE.ConeGeometry(r,h,8);g.translate(x||0,y||0,z||0);return g}
 export function bodyParts(){
- // per unit type: list of [geometry, colorKey]
- const SIDE='side',SH='shield';
- const infBase=()=>[[mergeGeo([box(.18,.8,.22,-.12,.4,0),box(.18,.8,.22,.12,.4,0)]),0x4a3622],[box(.55,.75,.35,0,1.17,0),SIDE],[sph(.17,0,1.72,0),0xd9a67a]];
- const helm=[sph(.2,0,1.75,0,true),0x9c8442];
+ // per unit type: list of [geometry, colorKey]; colorKey 'side' / 'shield' = coloured per army
+ const SIDE='side',SH='shield',WOOD=0x8a6a40,STEEL=0xb8b8b8,SKIN=0xd9a67a,LEATHER=0x6b4a2b;
+ const legs=()=>[mergeGeo([box(.18,.8,.22,-.12,.4,0),box(.18,.8,.22,.12,.4,0)]),0x4a3622];
+ const inf=()=>[legs(),[box(.55,.75,.35,0,1.17,0),SIDE],[sph(.17,0,1.72,0),SKIN]];
+ const shishak=[mergeGeo([sph(.2,0,1.75,0,true),cone(.2,.4,0,2.05,0)]),STEEL];          // pointed Rus/eastern helmet
+ const roundShield=[box(.62,.62,.08,-.12,1.1,.3),SH];
+ const kiteShield=[mergeGeo([box(.56,.8,.08,-.12,1.2,.3),box(.36,.35,.08,-.12,.66,.3)]),SH];
+ const horse=(cap)=>[
+  [mergeGeo([box(.62,.66,1.8,0,1.2,0),box(.34,.8,.4,0,1.7,.9,-0.5),box(.3,.3,.65,0,2.05,1.15)]),LEATHER],
+  [mergeGeo([box(.16,.85,.16,-.22,.43,.65),box(.16,.85,.16,.22,.43,.65),box(.16,.85,.16,-.22,.43,-.65),box(.16,.85,.16,.22,.43,-.65),box(.1,.6,.1,0,1.2,-.95)]),0x3e2a18],
+  ...(cap?[[box(.76,.7,1.95,0,1.12,0),SIDE]]:[])];
  return{
-  sword:[...infBase(),helm,[box(.62,.9,.08,-.12,1.05,.3),SH],[box(.06,.06,.6,.32,1.05,.35),0xcccccc]],
-  spear:[...infBase(),helm,[box(.62,.9,.08,-.12,1.05,.3),SH],[cyl(.035,3.4,.32,1.6,.15),0x8a6a40]],
-  mil:[...infBase(),[cyl(.03,2.6,.3,1.3,.1),0x8a6a40]],
-  arch:[...infBase(),[sph(.19,0,1.76,0,true),0x6b4a2b],[mergeGeo([box(.05,1.3,.05,-.35,1.25,.15),box(.06,.6,.06,-.38,1.25,.22)]),0x5a3a1a]],
-  cav:[[mergeGeo([box(.62,.66,1.8,0,1.2,0),box(.34,.8,.4,0,1.7,.9,-0.5),box(.3,.3,.65,0,2.05,1.15)]),0x6b4a2b],
-       [mergeGeo([box(.16,.85,.16,-.22,.43,.65),box(.16,.85,.16,.22,.43,.65),box(.16,.85,.16,-.22,.43,-.65),box(.16,.85,.16,.22,.43,-.65),box(.1,.6,.1,0,1.2,-.95)]),0x3e2a18],
-       [box(.5,.7,.35,0,1.95,-.1),SIDE],[sph(.16,0,2.48,-.1),0xd9a67a],[sph(.18,0,2.5,-.1,true),0x9c8442],[cyl(.03,3.2,.3,2.2,.3),0x8a6a40]],
-  eleph:[[mergeGeo([box(1.9,1.8,3,0,2.4,0),box(1.3,1.3,1,0,2.7,1.8),box(.38,1.7,.38,0,1.6,2.35)]),0x8d8780],
-         [mergeGeo([box(.55,1.6,.55,-.6,.8,1),box(.55,1.6,.55,.6,.8,1),box(.55,1.6,.55,-.6,.8,-1),box(.55,1.6,.55,.6,.8,-1)]),0x77716b],
-         [box(1.3,.7,1.3,0,3.65,-.3),SIDE],[box(.45,.6,.3,0,4.3,-.3),SIDE],[sph(.16,0,4.78,-.3),0xd9a67a],[mergeGeo([box(.12,.12,.9,-.35,2.3,2.4,0.4),box(.12,.12,.9,.35,2.3,2.4,0.4)]),0xf0ead8]]
+  mil:[...inf(),[sph(.19,0,1.76,0,true),LEATHER],[cyl(.03,2.6,.3,1.3,.1),WOOD]],
+  spear:[...inf(),shishak,roundShield,[cyl(.035,3.4,.32,1.6,.15),WOOD]],
+  druzh:[...inf(),shishak,[box(.6,.5,.38,0,1.0,0),STEEL],kiteShield,[box(.06,.06,.75,.32,1.05,.4),STEEL]],
+  arch:[...inf(),[sph(.19,0,1.76,0,true),LEATHER],[mergeGeo([box(.05,1.3,.05,-.35,1.25,.15),box(.06,.6,.06,-.38,1.25,.22)]),0x5a3a1a]],
+  xbow:[...inf(),[mergeGeo([sph(.19,0,1.76,0,true),cyl(.32,.04,0,1.8,0)]),STEEL],[mergeGeo([box(.08,.08,.75,.1,1.25,.35),box(.7,.05,.05,.1,1.25,.68)]),0x5a3a1a]],
+  knight:[...horse(true),[box(.5,.7,.35,0,1.95,-.1),STEEL],[cyl(.19,.38,0,2.5,-.1),STEEL],[box(.5,.6,.07,-.32,1.95,.05),SH],[box(.07,.07,3.6,.3,2.05,.9),WOOD]],
+  hasb:[...horse(false),[box(.5,.7,.35,0,1.95,-.1),SIDE],[sph(.16,0,2.48,-.1),SKIN],[mergeGeo([sph(.18,0,2.5,-.1,true),cone(.18,.3,0,2.75,-.1)]),LEATHER],[mergeGeo([box(.05,1.2,.05,-.35,2.1,.05),box(.06,.55,.06,-.38,2.1,.12)]),0x5a3a1a]],
+  gen:[...horse(true),[box(.52,.72,.36,0,1.95,-.1),STEEL],[mergeGeo([sph(.19,0,2.5,-.1,true),cone(.19,.4,0,2.82,-.1)]),0xd4af37],[box(.6,.9,.06,0,1.85,-.32),SIDE],[cyl(.03,3.2,-.3,2.8,-.4),WOOD],[box(.04,.6,.9,-.3,4.0,-.85),SH]],
  };
 }
 export const SIDECOL={p:0xb3261e,e:0x2649a8},SHCOL={p:0xd8a63a,e:0xc9c9c9};
@@ -154,9 +160,9 @@ export function toScreen(x,y,z){const v=S3.v.set(x,y,z).project(S3.camera);const
 export function handleTap(cx,cy){
  if(!B||B.over)return;
  let best=null,bd=1e9;
- for(const r of B.regs){if(!alive(r))continue;const h=Hgt(r.x,r.z)+(r.body==='eleph'?3:1.5);
+ for(const r of B.regs){if(!alive(r))continue;const h=Hgt(r.x,r.z)+1.5;
   const s=toScreen(r.x,h,r.z);if(!s.ok)continue;const s2=toScreen(r.x+6,h,r.z);const rad=Math.max(34,Math.hypot(s2.x-s.x,s2.y-s.y));
-  const b=toScreen(r.x,h+(r.body==='eleph'?7:5.5),r.z);// banner
+  const b=toScreen(r.x,h+5.5,r.z);// banner
   const d=Math.min(Math.hypot(cx-s.x,cy-s.y),Math.hypot(cx-b.x,cy-b.y));if(d<rad&&d<bd){bd=d;best=r}}
  if(best&&best.side==='p'){if(best.routing)return;B.sel=new Set([best]);updateHud();return}
  const sel=[...B.sel].filter(r=>alive(r)&&!r.routing);
@@ -190,10 +196,10 @@ export function fx3d(kind,a,b,dur){
 }
 export function addCorpse(f,r){
  if(!S3||S3.corpseN>=1500)return;
- const dm=S3.dm,sc=r.body==='inf'?1:r.body==='cav'?1.6:3;
+ const dm=S3.dm,sc=r.body==='inf'?1:1.6;
  dm.position.set(f.x,Hgt(f.x,f.z)+0.02,f.z);dm.rotation.set(0,Math.random()*6.28,0);dm.scale.set(sc,sc*0.8,sc);dm.updateMatrix();
  S3.corpses.setMatrixAt(S3.corpseN,dm.matrix);
- S3.col.setHex(r.body==='inf'?SIDECOL[r.side]:r.body==='cav'?0x5a3e24:0x7d7770).multiplyScalar(0.6);
+ S3.col.setHex(r.body==='inf'?SIDECOL[r.side]:0x5a3e24).multiplyScalar(0.6);
  S3.corpses.setColorAt(S3.corpseN,S3.col);
  S3.corpseN++;S3.corpses.count=S3.corpseN;S3.corpses.instanceMatrix.needsUpdate=true;if(S3.corpses.instanceColor)S3.corpses.instanceColor.needsUpdate=true;
 }
@@ -218,6 +224,11 @@ export function syncFigures(dt){
    const f=r.figs[i];
    const row=Math.floor(i/F.cols),inRow=row<rows-1?F.cols:n-row*F.cols,col=i%F.cols;
    let lx=(col-(inRow-1)/2)*F.sx,lz=((rows-1)/2-row)*F.sz*(fighting?0.75:1);
+   if(F.wedge){ // triangle, point towards the enemy
+    let wr=0,c=i;while(c>wr){c-=wr+1;wr++}
+    let wrows=0,tot=0;while(tot<n){wrows++;tot+=wrows}
+    lx=(c-wr/2)*F.sx;lz=((wrows-1)/2-wr)*F.sz;
+   }
    if(r.routing){lx*=2.3;lz*=2;lx+=Math.sin(f.ph*7)*3;lz+=Math.cos(f.ph*5)*3}
    if(fighting){lx+=Math.sin(t*1.3+f.ph)*0.35;lz+=Math.sin(t*1.1+f.ph*2)*0.3+(row===0?0.8:0)}
    const sx=r.x+lx*ca+lz*sa,sz=r.z-lx*sa+lz*ca;
@@ -257,7 +268,7 @@ export function syncOverlays(dt){
   const ring=S3.rings.get(r);ring.visible=vis&&B.sel.has(r);
   if(!vis)continue;
   const ox=r.figs.reduce((a,f)=>a+f.x,0)/r.figs.length,oz=r.figs.reduce((a,f)=>a+f.z,0)/r.figs.length;
-  bn.sp.position.set(ox,Hgt(ox,oz)+(r.body==='eleph'?8:r.body==='cav'?6.5:5),oz);
+  bn.sp.position.set(ox,Hgt(ox,oz)+(r.body==='cav'?6.5:5),oz);
   const sc=Math.max(0.75,Math.min(1.6,S3.cam.dist/95));bn.sp.scale.set(7*sc,3.94*sc,1);
   drawBanner(r,bn);
   if(ring.visible){ring.position.set(r.x,Hgt(r.x,r.z)+0.4,r.z);ring.material.opacity=0.6+0.3*Math.sin(S3.t*5)}

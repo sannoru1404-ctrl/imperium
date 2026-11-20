@@ -1,11 +1,11 @@
-import { UT, uname } from './data.js';
+import { UT, uname, FORMS } from './data.js';
 import { $ } from './util.js';
-import { B, alive, rdist, msg } from './battle-sim.js';
+import { B, alive, rdist, msg, canForm, hasAura } from './battle-sim.js';
 import { S3 } from './battle-3d.js';
 
 // ---------- HUD ----------
 export function buildCards(){
- $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div><div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div></div>`).join('');
+ $('bCards').innerHTML=B.regs.filter(r=>r.side==='p').map(r=>`<div class="card" id="card${r.id}" onclick="cardTap(${r.id})"><div class="ci">${UT[r.t].i}</div><div class="cb"><i class="m"></i></div><div class="cb"><i class="mo"></i></div><div class="cb"><i class="st"></i></div></div>`).join('');
 }
 export function cardTap(id){
  const r=B.regs.find(x=>x.id===id);if(!r||!alive(r)||r.routing)return;
@@ -22,10 +22,16 @@ export function updateHud(){
  $('bMsg').innerHTML=B.msgs.map(m=>`<div style="opacity:${Math.min(1,m.life)}">${m.t}</div>`).join('');
  B.regs.filter(r=>r.side==='p').forEach(r=>{const c=$('card'+r.id);if(!c)return;
   c.classList.toggle('sel',B.sel.has(r));c.classList.toggle('gone',!alive(r)||r.routing);
-  c.querySelector('.m').style.width=Math.max(0,r.men)+'%';c.querySelector('.mo').style.width=Math.max(0,r.morale)+'%';
-  c.querySelector('.ci').textContent=r.routing?'🏳️':!alive(r)?'☠':UT[r.t].i;});
+  c.querySelector('.m').style.width=Math.max(0,r.men)+'%';c.querySelector('.mo').style.width=Math.max(0,r.morale)+'%';c.querySelector('.st').style.width=r.stam+'%';
+  c.querySelector('.ci').textContent=r.routing?'🏳️':!alive(r)?'☠':UT[r.t].i+(r.form!=='line'?FORMS[r.form].i:'');});
  const sel=[...B.sel];
- $('bInfo').innerHTML=sel.length===1?`<b>${uname(sel[0].t,'rome')}</b> · ${Math.round(sel[0].men)} бойцов · боевой дух ${Math.round(Math.max(0,sel[0].morale))}%`:sel.length?`Выбрано полков: ${sel.length}`:'<span class="small">Тапни свой полк, затем — врага (атака) или землю (марш).</span>';
+ const stamWord=v=>v>=75?'свежие':v>=50?'бодрые':v>=25?'устали':'измотаны';
+ if(sel.length===1){const r=sel[0];
+  $('bInfo').innerHTML=`<b>${uname(r.t,r.fac)}</b> · ${Math.round(r.men)} бойцов · дух ${Math.round(Math.max(0,r.morale))}% · ${stamWord(r.stam)}${r.form!=='line'?' · '+FORMS[r.form].n.toLowerCase():''}${hasAura(r)&&!r.gen?' · 👑 рядом воевода':''}`;
+ } else $('bInfo').innerHTML=sel.length?`Выбрано полков: ${sel.length}`:'<span class="small">Тапни свой полк, затем — врага (атака) или землю (марш).</span>';
+ const fr=sel.find(r=>(UT[r.t].forms||[]).length),f=fr?UT[fr.t].forms[0]:null;
+ $('bForm').disabled=!fr;
+ $('bForm').textContent=!fr?'Строй':sel.every(r=>r.form!=='line')?'▭ Обычный строй':FORMS[f].i+' '+FORMS[f].n;
 }
 export function bPause(){if(!B||B.over)return;B.paused=!B.paused;updateHud()}
 export function bSpeed(){if(!B)return;B.speed=B.speed===1?2:B.speed===2?3:1;updateHud()}
@@ -37,3 +43,12 @@ export function bCharge(){
  if(B.paused){B.paused=false}msg('⚔ В атаку!');updateHud();
 }
 export function bHalt(){if(!B)return;[...B.sel].forEach(r=>{r.order=r.ranged?null:{type:'move',x:r.x,z:r.z}});msg('Стоять!')}
+
+// Toggle the selected regiments between line and their special formation (shield wall / wedge / loose)
+export function bForm(){
+ if(!B||B.over)return;
+ const sel=[...B.sel].filter(r=>alive(r)&&!r.routing&&(UT[r.t].forms||[]).length);if(!sel.length)return;
+ const toLine=sel.every(r=>r.form!=='line');
+ for(const r of sel){const f=toLine?'line':UT[r.t].forms[0];if(canForm(r,f))r.form=f}
+ msg(toLine?'Обычный строй':sel.length===1?FORMS[sel[0].form].n+'!':'Сменить строй!');updateHud();
+}

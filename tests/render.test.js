@@ -7,9 +7,10 @@ import * as hud from '../src/js/battle-hud.js';
 import { mk, newGame } from '../src/js/state.js';
 
 newGame(5);
-const att = ['sword', 'sword', 'spear', 'arch', 'cav', 'eleph', 'mil'].map(t => mk(t));
-const def = ['sword', 'spear', 'eleph', 'cav', 'arch', 'arch'].map(t => mk(t));
-const pr = sim.tactical(att, def, 'rome', 'carth', 'att', 'Тест');
+const att = ['gen', 'druzh', 'spear', 'arch', 'knight', 'hasb', 'mil'].map(t => mk(t));
+const def = ['gen', 'druzh', 'xbow', 'knight', 'arch', 'spear'].map(t => mk(t));
+const pr = sim.tactical(att, def, 'rus', 'pol', 'att', 'Тест');
+hud.bSelAll(); hud.bForm(); hud.bForm();
 if (!r3.S3) { console.error('3D did not start'); process.exit(1); }
 const C = globalThis.CANVAS.L;
 C.pointerdown({ pointerId: 1, clientX: 220, clientY: 315, button: 0 }); C.pointerup({ pointerId: 1, clientX: 220, clientY: 315, button: 0 });

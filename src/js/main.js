@@ -3,14 +3,14 @@ import { newGame, loadGame, readSlot } from './state.js';
 import { endTurn } from './turn.js';
 import { tapProv, togglePick, openRecruit, recruit, upgrade } from './map.js';
 import { endBattle, bAuto, bRetreat } from './battle-sim.js';
-import { cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt } from './battle-hud.js';
+import { cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt, bForm } from './battle-hud.js';
 import { closeModal, showHelp, showSaves, saveTo, loadFrom } from './ui.js';
 import { $ } from './util.js';
 
 Object.assign(window, {
   newGame: () => newGame(), loadGame, endTurn,
   tapProv, togglePick, openRecruit, recruit, upgrade,
-  endBattle, bAuto, bRetreat, cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt,
+  endBattle, bAuto, bRetreat, cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt, bForm,
   closeModal, showHelp, showSaves, saveTo, loadFrom,
 });
 

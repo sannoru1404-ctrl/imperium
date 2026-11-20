@@ -7,7 +7,7 @@ import { seed } from '../src/js/rng.js';
 function fight(attTypes, defTypes, battleSeed) {
   const att = attTypes.map(t => mk(t)), def = defTypes.map(t => mk(t));
   let res;
-  sim.setupBattle(att, def, 'rome', 'carth', 'att', 'test', battleSeed);
+  sim.setupBattle(att, def, 'rus', 'pol', 'att', 'test', battleSeed);
   const B = sim.B;
   B.headless = true; B.resolve = r => (res = r); B.paused = false;
   let t = 0;
@@ -24,21 +24,21 @@ function fight(attTypes, defTypes, battleSeed) {
   return { win: res.win, time: Math.round(t), left: res.att.map(u => u.hp).concat(['|'], res.def.map(u => u.hp)).join(',') };
 }
 
-const types = ['sword', 'spear', 'arch', 'cav', 'eleph', 'mil'];
+const types = ['mil', 'spear', 'druzh', 'arch', 'xbow', 'knight', 'hasb', 'gen'];
 const RUNS = Number(process.env.RUNS || 20);
 console.log('win % of ROW (attacking, 3 regiments) vs COLUMN (defending, 3 regiments), ' + RUNS + ' runs each');
-console.log('        ' + types.map(t => t.padStart(6)).join(''));
+console.log('        ' + types.map(t => t.padStart(7)).join(''));
 let total = 0;
 for (const a of types) {
   let line = a.padEnd(8);
   for (const d of types) {
     let w = 0;
     for (let i = 0; i < RUNS; i++) { seed(i + 1); if (fight([a, a, a], [d, d, d], 1000 + i).win === 'att') w++; total++; }
-    line += String(Math.round((100 * w) / RUNS)).padStart(6);
+    line += String(Math.round((100 * w) / RUNS)).padStart(7);
   }
   console.log(line);
 }
-const x = fight(['sword', 'spear', 'arch', 'cav'], ['sword', 'eleph', 'cav', 'arch'], 777);
-const y = fight(['sword', 'spear', 'arch', 'cav'], ['sword', 'eleph', 'cav', 'arch'], 777);
+const x = fight(['gen', 'druzh', 'spear', 'arch', 'knight'], ['gen', 'druzh', 'xbow', 'knight', 'arch'], 777);
+const y = fight(['gen', 'druzh', 'spear', 'arch', 'knight'], ['gen', 'druzh', 'xbow', 'knight', 'arch'], 777);
 if (JSON.stringify(x) !== JSON.stringify(y)) { console.error('NOT DETERMINISTIC', x, y); process.exit(1); }
 console.log(`battles: ${total + 2} | determinism: ok (${x.win}, ${x.time}s)`);

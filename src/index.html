@@ -3,23 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Imperium: Тотальная война</title>
+<title>Imperium: Русь 1100</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=PT+Serif:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Ruslan+Display&family=PT+Serif:wght@400;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#1c1712;--panel:#2a221a;--line:#5a4630;--gold:#e0b34a;--text:#efe4cc;--muted:#a8977a;--red:#c0392b}
+:root{--bg:#17120e;--panel:#241b14;--line:#6b4f2c;--gold:#d9a93a;--text:#f0e6d0;--muted:#a8977a;--red:#a8231b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:'PT Serif',Georgia,serif;overflow:hidden}
 button{font-family:inherit;font-size:15px;border:1px solid var(--line);background:#3a2e21;color:var(--text);padding:9px 12px;border-radius:8px;cursor:pointer}
 button:active{transform:scale(.97)}
-button.pri{background:linear-gradient(#a8322a,#7a1f19);border-color:#d4574c;font-weight:700}
+button.pri{background:linear-gradient(#a8231b,#6e1510);border-color:#d9a93a;font-weight:700}
 button:disabled{opacity:.4}
-.h{font-family:'Cinzel',serif;letter-spacing:.5px}
+.h{font-family:'Ruslan Display',serif;letter-spacing:.5px}
 #app{display:flex;flex-direction:column;height:100%}
 #top{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#140f0b;border-bottom:1px solid var(--line)}
-#top .stat{font-size:14px;white-space:nowrap}
+#top .stat{font-size:13px;white-space:nowrap}
+#top{gap:6px!important}
 #top .grow{flex:1}
-#mapWrap{flex:1;min-height:0;position:relative;background:#22465e}
+#mapWrap{flex:1;min-height:0;position:relative;background:#17120e}
 #map{width:100%;height:100%;display:block}
 #panel{max-height:46%;overflow-y:auto;background:var(--panel);border-top:2px solid var(--line);padding:10px 12px 14px}
 #log{font-size:13px;color:var(--muted);min-height:18px;margin-bottom:6px}
@@ -30,7 +31,7 @@ button:disabled{opacity:.4}
 .hpb i{display:block;height:100%;background:#7bc96f}
 .overlay{position:fixed;inset:0;background:rgba(10,7,5,.82);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .modal{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:90%;overflow-y:auto;box-shadow:0 10px 40px #000}
-.modal h2{margin:0 0 10px;font-family:'Cinzel',serif;color:var(--gold);font-size:20px}
+.modal h2{margin:0 0 10px;font-family:'Ruslan Display',serif;color:var(--gold);font-size:20px}
 .modal p{margin:6px 0;line-height:1.4}
 .rec{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #3d3124}
 .small{font-size:12px;color:var(--muted)}
@@ -53,20 +54,20 @@ button:disabled{opacity:.4}
 .card .ci{font-size:22px;line-height:1.2}
 .cb{height:4px;background:#000;border-radius:2px;overflow:hidden;margin-top:3px}
 .cb i{display:block;height:100%}
-.cb .m{background:#7bc96f}.cb .mo{background:#e8c35a}
+.cb .m{background:#7bc96f}.cb .mo{background:#e8c35a}.cb .st{background:#6fb7ff}
 #bInfo{font-size:13px;margin:2px 0 6px;min-height:18px;text-shadow:0 1px 2px #000}
 .bbtn{padding:8px 10px;font-size:14px}
-#title{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(circle at 50% 35%,#4a2a18,#120c08 70%);text-align:center;padding:20px}
-#title h1{font-family:'Cinzel',serif;font-weight:800;font-size:44px;margin:0;color:var(--gold);text-shadow:0 3px 0 #5a2a10,0 0 30px #a0602080}
+#title{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(circle at 50% 30%,#5a1f14,#140c08 70%);text-align:center;padding:20px}
+#title h1{font-family:'Ruslan Display',serif;font-weight:400;font-size:46px;margin:0;color:var(--gold);text-shadow:0 3px 0 #5a2a10,0 0 30px #a0602080}
 #title .sub{color:var(--muted);font-size:15px;max-width:320px}
 #title button{min-width:220px;font-size:17px;padding:12px}
 </style>
 </head>
 <body>
 <div id="title">
-  <div style="font-size:54px">🦅</div>
+  <div style="font-size:54px;filter:drop-shadow(0 4px 8px #000)">🛡️</div>
   <h1>IMPERIUM</h1>
-  <div class="sub">Поведи Рим к господству над Средиземноморьем. Захвати 14 провинций из 18 — и не потеряй сам Рим.</div>
+  <div class="sub">Лето 1100-е. Русь раздроблена, с запада давят Польша и Венгрия, с юга — степь. Собери земли под рукой Киева: возьми 15 земель из 23 или Краков и Эстергом — и не отдай Киев.</div>
   <button class="pri" onclick="newGame()">Новая игра</button>
   <button id="contBtn" onclick="loadGame()" style="display:none">Продолжить</button>
   <button onclick="showSaves()">Загрузить</button>
@@ -75,7 +76,7 @@ button:disabled{opacity:.4}
 
 <div id="app">
   <div id="top">
-    <span class="h" style="color:var(--gold)">🦅 SPQR</span>
+    <span class="h" style="color:var(--gold);font-size:18px">☦</span>
     <span class="stat" id="sGold"></span>
     <span class="stat" id="sTurn"></span>
     <span class="grow"></span>
@@ -104,6 +105,7 @@ button:disabled{opacity:.4}
       <button class="bbtn" onclick="bSelAll()">Все</button>
       <button class="bbtn pri" onclick="bCharge()">⚔ В атаку!</button>
       <button class="bbtn" onclick="bHalt()">✋ Стоп</button>
+      <button class="bbtn" id="bForm" onclick="bForm()" disabled>Строй</button>
       <button class="bbtn" onclick="bAuto()">🎲</button>
       <button class="bbtn" onclick="bRetreat()">🏳</button>
     </div>

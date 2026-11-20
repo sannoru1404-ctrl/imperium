@@ -1,53 +1,104 @@
-
-
 // ===================== DATA =====================
-export const FACT={
- rome:{n:'Рим',c:'#c0392b',cap:'roma'},
- carth:{n:'Карфаген',c:'#8e44ad',cap:'carthago'},
- gaul:{n:'Галлы',c:'#2e8b3e',cap:'gallia'},
- greek:{n:'Греки',c:'#2a6fc9',cap:'maced'},
- rebel:{n:'Мятежники',c:'#7d7468'}
-};
-export const UT={
- mil:{n:'Ополчение',i:'🔱',atk:4,def:3,mov:2,rng:1,cost:150},
- sword:{n:'Мечники',rn:'Легионеры',i:'⚔️',atk:7,def:5,mov:2,rng:1,cost:300},
- spear:{n:'Копейщики',rn:'Триарии',i:'🛡️',atk:5,def:7,mov:2,rng:1,cost:350},
- arch:{n:'Лучники',rn:'Сагиттарии',i:'🏹',atk:5,def:2,mov:2,rng:4,cost:300},
- cav:{n:'Конница',rn:'Эквиты',i:'🐎',atk:7,def:4,mov:4,rng:1,cost:500},
- eleph:{n:'Боевые слоны',i:'🐘',atk:10,def:6,mov:3,rng:1,cost:800}
-};
-export const RECRUIT={rome:['sword','spear','arch','cav'],carth:['sword','spear','arch','cav','eleph'],gaul:['sword','spear','arch','cav'],greek:['sword','spear','arch','cav'],rebel:['mil']};
-export function uname(t,f){return (f==='rome'&&UT[t].rn)||UT[t].n}
+// Prologue campaign: Eastern Europe, 1100. All balance numbers live here.
 
-export const PROV_DEF=[
- ['iberia','Иберия',55,190,'rebel',150],
- ['ncarth','Новый Карфаген',88,240,'carth',180],
- ['narbo','Нарбон',135,140,'gaul',170],
- ['gallia','Галлия',105,70,'gaul',200],
- ['germ','Германия',230,40,'gaul',130],
- ['cisalp','Цизальпина',195,108,'gaul',180],
- ['illyr','Иллирия',282,98,'rebel',140],
- ['roma','Рим',236,168,'rome',260],
- ['capua','Капуя',258,205,'rome',200],
- ['taras','Тарент',290,240,'rebel',190],
- ['syrac','Сиракузы',262,296,'rebel',210],
- ['sard','Сардиния',191,243,'carth',120],
- ['carthago','Карфаген',205,348,'carth',280],
- ['numid','Нумидия',90,362,'carth',140],
- ['cyren','Киренаика',340,400,'rebel',170],
- ['maced','Македония',335,148,'greek',220],
- ['epir','Эпир',315,192,'greek',150],
- ['athen','Афины',350,230,'greek',250]
-];
-export const ADJ=[['iberia','ncarth'],['iberia','narbo'],['ncarth','numid',1],['narbo','gallia'],['narbo','cisalp'],['narbo','sard',1],
-['gallia','germ'],['gallia','cisalp'],['germ','cisalp'],['germ','illyr'],['cisalp','roma'],['cisalp','illyr'],
-['roma','capua'],['roma','sard',1],['capua','taras'],['capua','syrac',1],['taras','syrac',1],['taras','epir',1],
-['syrac','carthago',1],['sard','carthago',1],['carthago','numid'],['carthago','cyren'],['cyren','athen',1],
-['illyr','maced'],['illyr','epir'],['maced','epir'],['maced','athen'],['epir','athen']];
-export const START_ARMY={
- roma:['sword','sword','spear','arch','cav'],capua:['sword','arch'],
- carthago:['sword','sword','eleph','cav','arch'],numid:['cav','cav'],ncarth:['sword','spear'],
- gallia:['sword','sword','sword','cav'],cisalp:['sword','sword','arch'],narbo:['spear'],
- maced:['spear','spear','cav','arch'],athen:['spear','arch']
+export const PLAYER='rus';
+export const AI_FACTIONS=['pol','hun'];
+export const START_YEAR=1100;
+
+export const FACT={
+ rus:{n:'Киевская Русь',adj:'Русские',c:'#b3261e',cap:'kiev',emblem:'☦'},
+ pol:{n:'Польша',adj:'Поляки',c:'#c9a227',cap:'krak',emblem:'🦅'},
+ hun:{n:'Венгрия',adj:'Венгры',c:'#3d8b5a',cap:'eszt',emblem:'✚'},
+ rebel:{n:'Независимые земли',adj:'Местные',c:'#8a8278',tc:'#d0c8bc'}
 };
-export const WIN_N=14;
+
+// Unit types.
+// atk/def: melee attack/defence · mov: campaign-era speed class (2 foot, 4 horse)
+// range: shooting range in battle metres (0 = melee only) · reload: seconds between volleys
+// ap: armour piercing (share of target defence ignored by missiles)
+// antiCav: damage multiplier against cavalry · charge: charge strength multiplier
+// ammo: volleys per battle · skirmish: keeps distance from enemy infantry automatically
+// forms: formations the unit can take (see FORMS)
+// names: per-faction name overrides
+export const UT={
+ mil:   {n:'Ополчение',     i:'🔱',atk:4,def:3,mov:2,cost:150,forms:['wall'],names:{rus:'Пешее ополчение',pol:'Крестьянское ополчение',hun:'Сельское ополчение'}},
+ spear: {n:'Копейщики',     i:'🛡️',atk:5,def:7,mov:2,cost:300,antiCav:2,forms:['wall'],names:{}},
+ druzh: {n:'Латная пехота', i:'⚔️',atk:8,def:7,mov:2,cost:450,forms:['wall'],names:{rus:'Пешая дружина',pol:'Пешие латники',hun:'Пешие воины'}},
+ arch:  {n:'Лучники',       i:'🏹',atk:5,def:2,mov:2,cost:300,range:55,reload:3.0,ammo:16,skirmish:true,forms:['loose'],names:{}},
+ xbow:  {n:'Арбалетчики',   i:'🎯',atk:8,def:3,mov:2,cost:400,range:42,reload:5.0,ammo:12,ap:0.4,forms:['loose'],names:{}},
+ knight:{n:'Рыцари',        i:'🐴',atk:9,def:7,mov:4,cost:700,charge:1.6,forms:['wedge'],names:{rus:'Конная дружина',pol:'Рыцари',hun:'Венгерские рыцари'}},
+ hasb:  {n:'Конные лучники',i:'🏇',atk:5,def:3,mov:4,cost:500,range:40,reload:3.0,ammo:20,skirmish:true,forms:['loose'],names:{rus:'Конные стрелки',hun:'Мадьярские конные лучники',rebel:'Половецкие конники'}},
+ gen:   {n:'Воевода',       i:'👑',atk:7,def:6,mov:4,cost:400,charge:1.3,general:true,forms:['wedge'],names:{rus:'Князь с дружиной',pol:'Воевода с хоругвью',hun:'Палатин с дружиной'}},
+};
+export function isRanged(t){return !!UT[t].range}
+export function isCav(t){return UT[t].mov>2}
+export function uname(t,f){return (UT[t].names&&UT[t].names[f])||UT[t].n}
+
+// Formations: effects are applied in battle-sim.js
+export const FORMS={
+ line: {n:'Обычный строй',i:'▭'},
+ wall: {n:'Стена щитов',  i:'🧱',d:'Защита спереди ×1.5, стрелы спереди ×0.6, скорость ×0.5, без натиска'},
+ wedge:{n:'Клин',         i:'🔺',d:'Натиск ×1.4, защита ×0.85'},
+ loose:{n:'Рассыпной строй',i:'⁘',d:'Урон от стрел ×0.5, защита в ближнем бою ×0.8'},
+};
+
+export const RECRUIT={
+ rus:['mil','spear','druzh','arch','hasb','knight','gen'],
+ pol:['mil','spear','druzh','xbow','arch','knight','gen'],
+ hun:['mil','spear','druzh','arch','hasb','knight','gen'],
+ rebel:['mil','spear','arch']
+};
+
+// Map after the political map of Europe c. 1100. [id, name, x, y, owner, base income]
+export const PROV_DEF=[
+ ['kiev','Киев',258,290,'rus',280],
+ ['pereya','Переяславль',312,306,'rus',190],
+ ['novg','Новгород',290,30,'rebel',240],
+ ['pskov','Псков',228,52,'rebel',170],
+ ['polot','Полоцк',218,132,'rebel',180],
+ ['smol','Смоленск',308,150,'rebel',200],
+ ['chern','Чернигов',372,238,'rebel',210],
+ ['pinsk','Туров-Пинск',192,228,'rebel',150],
+ ['volyn','Волынь',146,268,'rebel',170],
+ ['galich','Галич',150,322,'rebel',190],
+ ['krak','Краков',88,302,'pol',260],
+ ['wroc','Вроцлав',30,282,'pol',200],
+ ['gnie','Гнезно',40,232,'pol',190],
+ ['mazov','Мазовия',108,222,'pol',160],
+ ['pomor','Поморье',74,184,'rebel',150],
+ ['pruss','Пруссия',132,170,'rebel',120],
+ ['lith','Литва',172,150,'rebel',130],
+ ['livon','Ливония',145,72,'rebel',130],
+ ['estl','Эстляндия',192,38,'rebel',120],
+ ['eszt','Эстергом',52,360,'hun',260],
+ ['szeg','Сегед',82,402,'hun',200],
+ ['trans','Трансильвания',168,398,'hun',180],
+ ['cuman','Половецкая степь',300,385,'rebel',140],
+];
+// [a, b, sea?]
+export const ADJ=[
+ ['novg','pskov'],['novg','smol'],['novg','estl'],['pskov','estl'],['pskov','livon'],['pskov','polot'],
+ ['polot','livon'],['polot','lith'],['polot','smol'],['polot','pinsk'],
+ ['smol','chern'],['chern','kiev'],['chern','pereya'],['kiev','pereya'],['kiev','pinsk'],['kiev','volyn'],['kiev','galich'],['kiev','cuman'],['pereya','cuman'],
+ ['pinsk','volyn'],['pinsk','lith'],['pinsk','mazov'],
+ ['lith','livon'],['lith','pruss'],['lith','mazov'],['livon','estl'],
+ ['pruss','pomor'],['pruss','mazov'],['pomor','gnie'],['pomor','mazov'],['pomor','livon',1],
+ ['gnie','mazov'],['gnie','wroc'],['gnie','krak'],['mazov','krak'],['mazov','volyn'],
+ ['wroc','krak'],['krak','galich'],['krak','eszt'],['volyn','galich'],
+ ['galich','trans'],['galich','cuman'],['eszt','szeg'],['eszt','trans'],['szeg','trans'],['trans','cuman'],
+];
+export const START_ARMY={
+ kiev:['gen','druzh','druzh','spear','arch','knight'],pereya:['gen','hasb','spear'],
+ krak:['gen','knight','druzh','spear','xbow','arch'],gnie:['gen','spear','druzh'],wroc:['spear','xbow'],mazov:['spear','arch'],
+ eszt:['gen','knight','hasb','hasb','spear','arch'],szeg:['hasb','spear'],trans:['gen','hasb','mil'],
+ novg:['spear','druzh','arch'],chern:['druzh','spear'],cuman:['hasb','hasb','hasb'],lith:['mil','arch'],galich:['spear','arch'],smol:['spear','mil'],
+};
+export const START_GOLD={rus:1200,pol:1200,hun:1150,rebel:0};
+export const WIN_N=15;
+// Campaign AI tuning
+export const AI={attackRatio:1.3,majorRatio:1.5,  // AI kingdoms are wary of attacking each other
+ playerGraceTurns:4,playerBias:1.3,aggressive:{},
+ maxAttacksPerTurn:3,   // each AI faction starts at most this many battles a year
+ occupationTurns:2};    // a conquered land pays no taxes for this many years
+// Independent lands: garrison size and a small standing force that regrows
+export const REBELS={garBonus:2,armyEvery:3,armyMax:3,unit:['spear','arch','druzh']};
