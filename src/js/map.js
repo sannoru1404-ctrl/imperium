@@ -2,7 +2,7 @@ import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI, BU
 import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS } from './mapdata.js';
 import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
-import { checkEnd, autoResolve, siegeMods } from './turn.js';
+import { checkEnd, autoResolve, siegeMods, siegeOpts, startSiege, hasRam } from './turn.js';
 import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
 import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost } from './rules.js';
 import { B, tactical } from './battle-sim.js';
@@ -89,7 +89,7 @@ export function render(recenter){
 export function drawMap(){
  const sel=G.sel?P(G.sel):null;
  const canMove=sel&&sel.owner===PLAYER&&sel.army.length&&!sel.moved&&pickedUnits(sel).length;
- const targets=canMove?adj(sel.id):[];
+ const targets=canMove?adj(sel.id):sel&&sel.besiege&&sel.owner===PLAYER&&pickedUnits(sel).length?[sel.besiege]:[];
  const cells=$('mCells');
  if(cells)cells.innerHTML=G.prov.map(p=>{const c=FACT[p.owner].c;return `<path d="${CELLS[p.id]}" fill="${c}" fill-opacity="${p.owner==='rebel'?.18:.45}" stroke="#2b1d10" stroke-opacity=".35" stroke-width="1.2"/>`}).join('');
  let s='';
@@ -103,6 +103,7 @@ export function drawMap(){
   s+=`<g onclick="tapProv('${p.id}')" style="cursor:pointer" class="reg${cap||p.tier>=3?' big':''}">
   <circle cx="${p.x}" cy="${p.y}" r="20" fill="transparent"/>
   <circle cx="${p.x}" cy="${p.y}" r="${isSel?r+3:r}" fill="${c}" stroke="${isSel?'#ffd84a':'#1a120a'}" stroke-width="${isSel?3:1.8}"/>
+  ${p.siege?`<text x="${p.x-r-10}" y="${p.y-r}" font-size="14">⛺</text>`:''}
   ${cap?`<text x="${p.x}" y="${p.y+4.5}" text-anchor="middle" font-size="12">👑</text>`:p.lvl>=3?`<text x="${p.x}" y="${p.y+4}" text-anchor="middle" font-size="10">🏰</text>`:''}
   <text class="lbl" x="${p.x}" y="${p.y+r+14}" text-anchor="middle" font-size="13" font-family="PT Serif" font-weight="700" fill="#fff" stroke="#1a120a" stroke-width="3" paint-order="stroke">${p.n}</text>`;
   if(p.army.length)s+=`<g transform="translate(${p.x+r-2},${p.y-r-12})"><rect width="24" height="14" rx="3" fill="#1a120a" stroke="${c}" stroke-width="1.5"/><text x="12" y="10.5" text-anchor="middle" font-size="10" fill="${p.moved&&p.owner===PLAYER?'#888':'#fff'}" font-weight="700">⚔${p.army.length}</text></g>`;
@@ -124,12 +125,14 @@ export function drawPanel(){
  const w=wallLevel(p);
  let h=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h" style="font-size:17px;color:${fc.tc||fc.c};filter:brightness(1.4)">${p.n}</span> <span class="small">· ${fc.n} · ур. ${p.lvl}${w?` · ${w>1?'🏰':'🧱'}`:''}</span></div>
  <div class="small" style="white-space:nowrap">💰${p.occ>0?'0':provIncome(p)} · 🔱${p.gar}${own?' · '+orderBadge(p):''}</div></div>`;
+ if(p.siege)h+=`<div class="small" style="color:#e0b34a;margin-top:4px">⛺ Осада: ${FACT[p.siege.f].n}, ${p.siege.turns} г.${p.siege.turns>=1?' · таран готов':''} · сдастся через ${Math.max(0,2+wallLevel(p)-p.siege.turns)} г.</div>`;
  if(own)h+=`<div class="tabs"><button class="${PANEL_TAB==='army'?'on':''}" onclick="setTab('army')">⚔ Войско</button><button class="${PANEL_TAB==='build'?'on':''}" onclick="setTab('build')">🏗 Постройки ${usedSlots(p)}/${slots(p)}</button></div>`;
  if(!own||PANEL_TAB==='army'){
   if(p.army.length){
    const gen=p.army.some(u=>UT[u.t].general);
    h+=`<div style="margin-top:6px">`;
-   if(own)h+=`<div class="small">${p.moved?'Войско уже ходило в этом году.':gen?'Выбери отряды для похода и нажми на соседнюю землю:':'Без воеводы войско ходит только по своим землям.'}</div>`;
+   if(own&&p.besiege)h+=`<div class="small" style="color:#e0b34a">⛺ Войско осаждает ${P(p.besiege).n}. Нажми на город, чтобы штурмовать. <a href="#" style="color:var(--gold)" onclick="event.preventDefault();liftSiege()">Снять осаду</a></div>`;
+   else if(own)h+=`<div class="small">${p.moved?'Войско уже ходило в этом году.':gen?'Выбери отряды для похода и нажми на соседнюю землю:':'Без воеводы войско ходит только по своим землям.'}</div>`;
    p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${uname(u.t,p.owner)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
    h+=`</div><div class="small" style="margin-top:4px">Сила войска: ${Math.round(str(p.army))}${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
   } else h+=`<div class="small" style="margin-top:6px">Войска нет. Гарнизон: ${p.gar} ополч.${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
@@ -165,7 +168,7 @@ export function togglePick(id){G.pick.has(id)?G.pick.delete(id):G.pick.add(id);r
 export function tapProv(id){
  if(G.busy)return;
  const sel=G.sel?P(G.sel):null, t=P(id);
- if(sel&&sel.owner===PLAYER&&!sel.moved&&adj(sel.id).includes(id)&&pickedUnits(sel).length){moveArmy(sel,t);return}
+ if(sel&&sel.owner===PLAYER&&(!sel.moved||sel.besiege===id)&&adj(sel.id).includes(id)&&pickedUnits(sel).length){moveArmy(sel,t);return}
  G.sel=id;G.pick=new Set(t.owner===PLAYER?t.army.map(u=>u.id):[]);render();
 }
 
@@ -189,12 +192,16 @@ export async function moveArmy(from,to){
  if(!def.length){from.army=from.army.filter(u=>!G.pick.has(u.id));capture(to,PLAYER,units);G.sel=to.id;G.pick=new Set();render();checkEnd();return}
  const sm=siegeMods(to,PLAYER);
  const sa=Math.round(str(units)),sd=Math.round(str(to.army)*sm[1]+str(garUnits(to),sm[0]));
- const ch=await ask(`Битва за ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${units.length} отр.)</p><p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
-  [['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт'],['no','Отмена']]);
+ const w=wallLevel(to),ram=hasRam(to,PLAYER);
+ const wallTxt=w?`<p>🧱 ${w>1?'Каменные':'Деревянные'} стены. ${ram?'Таран готов — ворота падут быстро.':to.siege&&to.siege.f===PLAYER?'Таран будет готов через год осады.':'Можно штурмовать по лестницам или осадить: через год будет таран, а через '+(2+w)+' года город сдастся от голода.'}</p>`:'';
+ const ch=await ask(`${w?'Город':'Битва за'} ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${units.length} отр.)</p><p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>${wallTxt}${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
+  w?[['fight',ram?'⚔ Штурм с тараном':'⚔ Штурм по лестницам',1],['auto','🎲 Авторасчёт штурма'],...(to.siege?[]:[['siege','⛺ Осадить']]),['no','Отмена']]
+   :[['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт'],['no','Отмена']]);
  if(ch==='no')return;
+ if(ch==='siege'){startSiege(from,to,PLAYER);G.pick=new Set();render();return}
  from.army=from.army.filter(u=>!G.pick.has(u.id));
  G.pick=new Set();
- const res=ch==='fight'?await tactical(units,def,PLAYER,to.owner,'att',to.n):autoResolve(units,def,...sm);
+ const res=ch==='fight'?await tactical(units,def,PLAYER,to.owner,'att',to.n,siegeOpts(to,PLAYER)):autoResolve(units,def,...sm);
  applyBattle(from,to,PLAYER,res);
  G.sel=to.owner===PLAYER?to.id:from.id;
  render();checkEnd();
@@ -262,3 +269,5 @@ export function recruit(t){
  if(p.army.length<MAX_ARMY&&p.rec<p.lvl)openRecruit();
 }
 export function upgrade(){const p=P(G.sel),c=SETTLE_COST*p.lvl;if(G.fac[PLAYER].gold<c||p.lvl>=3)return;G.fac[PLAYER].gold-=c;p.lvl++;addLog(`${p.n} отстраивается (ур. ${p.lvl}).`);render()}
+
+export function liftSiege(){const p=P(G.sel);if(!p||!p.besiege)return;const t=P(p.besiege);if(t)t.siege=null;p.besiege=null;addLog(`Осада ${t?t.n:''} снята.`);render()}

@@ -29,6 +29,7 @@ export async function endTurn(){
   if(p.owner==='rebel'&&G.turn%REBELS.armyEvery===0&&p.army.length<REBELS.armyMax)p.army.push(mk(REBELS.unit[p.army.length%REBELS.unit.length]));
   p.army.forEach(u=>u.hp=Math.min(100,u.hp+12));
  });
+ sieges();
  yearlyUpdate();
  if(G.fac[PLAYER].gold===0&&income(PLAYER).net<0){const p=G.prov.find(p=>p.owner===PLAYER&&p.army.length);if(p){p.army.pop();addLog('Казна пуста — один отряд дезертировал!')}}
  G.busy=false;$('endBtn').disabled=false;
@@ -94,8 +95,14 @@ export async function aiTurn(f){
    const stay=[];while(need>0&&str(stay)<need&&sorted.length>1)stay.push(sorted.shift());
    sorted.unshift(...gens.slice(0,1));stay.push(...gens.slice(1));
    const units=sorted;
-   const ds=str(best.army)+str(garUnits(best),1.2)+0.1;
-   if(!units.length||str(units)/ds<=aggr)continue;
+   const sm=siegeMods(best,f);
+   const ds=str(best.army)*sm[1]+str(garUnits(best),sm[0])+0.1;
+   if(!units.length)continue;
+   if(str(units)/ds<=aggr){
+    // walls too strong to storm: blockade the town instead and starve it out
+    if(wallLevel(best)&&!best.siege&&str(units)/(str(best.army)+str(garUnits(best),1.2)+0.1)>1.1){startSiege(p,best,f)}
+    continue;
+   }
    attacks++;
    p.army=stay;
    await aiAttack(p,best,f,units);
@@ -121,7 +128,7 @@ export async function aiAttack(from,to,f,units){
   if(!def.length){capture(to,f,units);render();await sleep(500);checkEnd();return}
   const ch=await ask(`⚠ ${FACT[f].n} атакуют!`,`<p>Враг вторгся в провинцию <b>${to.n}</b>.</p><p>Враг: <b>${Math.round(str(units))}</b> (${units.length} отр.)</p><p>Твоя оборона: <b>${Math.round(str(to.army)+str(garUnits(to),1.2))}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>`,
    [['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт']]);
-  const res=ch==='fight'?await tactical(units,def,f,PLAYER,'def',to.n):autoResolve(units,def,...siegeMods(to,f));
+  const res=ch==='fight'?await tactical(units,def,f,PLAYER,'def',to.n,siegeOpts(to,f)):autoResolve(units,def,...siegeMods(to,f));
   applyBattle(from,to,f,res);G.sel=null;render();checkEnd();
  } else {
   if(!def.length){capture(to,f,units);return}
@@ -129,8 +136,34 @@ export async function aiAttack(from,to,f,units){
  }
 }
 // walls make the garrison and the defending army stronger; siege engineering (tech) cancels part of it
+// ---------- sieges on the campaign map ----------
+export function startSiege(from,to,f){
+ to.siege={f,from:from.id,turns:0};from.moved=true;from.besiege=to.id;
+ if(to.owner===PLAYER)addLog(`⛺ ${FACT[f].n} осадили ${to.n}! Разбей осаждающих в земле ${from.n}, иначе город сдастся.`);
+ else if(f===PLAYER)addLog(`⛺ Осада ${to.n} началась. Через год будет таран; город сдастся от голода через ${2+wallLevel(to)} года.`);
+}
+export function sieges(){
+ for(const p of G.prov){
+  const S=p.siege;if(!S)continue;
+  const from=P(S.from);
+  const ok=from.owner===S.f&&from.army.some(u=>UT[u.t].general)&&p.owner!==S.f&&(p.owner==='rebel'||atWar(S.f,p.owner));
+  if(!ok){if(p.owner===PLAYER||S.f===PLAYER)addLog(`Осада ${p.n} снята.`);p.siege=null;from.besiege=null;continue}
+  S.turns++;from.moved=true;
+  // hunger in the town
+  p.gar=Math.max(0,p.gar-1);
+  p.army.forEach(u=>u.hp=Math.round(u.hp*0.85));p.army=p.army.filter(u=>u.hp>=15);
+  if(S.turns>=2+wallLevel(p)||(!p.gar&&!p.army.length)){
+   const units=from.army;from.army=[];from.besiege=null;p.siege=null;
+   if(p.owner===PLAYER||S.f===PLAYER)addLog(`🏳 ${p.n} сдаётся от голода!`);
+   capture(p,S.f,units);
+  }
+ }
+}
+export function hasRam(to,f){return !!(to.siege&&to.siege.f===f&&to.siege.turns>=1)}
+export function siegeOpts(to,f){const w=wallLevel(to);return w?{wall:w,ram:hasRam(to,f)}:null}
 export function siegeMods(to,attacker){
- const w=wallLevel(to),k=hasTech(attacker,'mil3')?0.75:1;
+ const k=hasTech(attacker,'mil3')?0.75:1;
+ const w=Math.max(0,wallLevel(to)-(hasRam(to,attacker)?0.6:0));
  return [1+(0.2+0.3*w)*k,1+0.15*w*k];
 }
 export function autoResolve(att,def,garBonus,defMult=1){

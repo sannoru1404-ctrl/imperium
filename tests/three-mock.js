@@ -9,10 +9,11 @@ class PlaneGeometry extends BG{constructor(w,h,a,b){super((a+1)*(b+1));const p=t
 class Mat{constructor(o={}){Object.assign(this,o)}dispose(){}}
 class O3{constructor(){this.position=new V3();this.rotation=new V3();this.scale=new V3(1,1,1);this.matrix={};this.children=[];this.userData={};this.visible=true}updateMatrix(){}lookAt(x,y,z){if([x,y,z].some(v=>typeof v!=='number'||isNaN(v)))throw Error('lookAt NaN')}add(...o){this.children.push(...o)}remove(o){this.children=this.children.filter(c=>c!==o)}traverse(f){f(this);this.children.forEach(c=>c.traverse?c.traverse(f):f(c))}}
 class Mesh extends O3{constructor(g,m){super();this.geometry=g;this.material=m}}
+class Cone extends BG{rotateY(){return this}}
 class IM extends Mesh{constructor(g,m,c){super(g,m);this.cap=c;this.count=c;this.instanceMatrix={setUsage(){},needsUpdate:false};this.instanceColor=null}
  setMatrixAt(i){if(i>=this.cap||i<0)throw Error('instance overflow '+i+'/'+this.cap)}setColorAt(i){if(i>=this.cap)throw Error('color overflow');this.instanceColor=this.instanceColor||{}}}
 const mkEl=()=>{const L={};return{style:{},L,addEventListener:(k,f)=>L[k]=f,setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:400,height:700}),remove(){}}};
-globalThis.THREE={Vector3:V3,Vector2:V2,Color,BufferAttribute:BA,BufferGeometry,BoxGeometry:BG,SphereGeometry:BG,CylinderGeometry:BG,ConeGeometry:BG,RingGeometry:BG,PlaneGeometry,
+globalThis.THREE={Vector3:V3,Vector2:V2,Color,BufferAttribute:BA,BufferGeometry,BoxGeometry:BG,SphereGeometry:BG,CylinderGeometry:BG,ConeGeometry:Cone,RingGeometry:BG,PlaneGeometry,
  MeshLambertMaterial:Mat,MeshBasicMaterial:Mat,SpriteMaterial:Mat,Mesh,InstancedMesh:IM,Sprite:class extends O3{constructor(m){super();this.material=m}},Object3D:O3,Scene:O3,
  Fog:class{},HemisphereLight:O3,DirectionalLight:O3,PerspectiveCamera:class extends O3{updateProjectionMatrix(){}},CanvasTexture:class{dispose(){}},
  WebGLRenderer:class{constructor(){this.domElement=mkEl();globalThis.CANVAS=this.domElement}getContext(){return{}}setPixelRatio(){}setSize(){}render(){}dispose(){}forceContextLoss(){}},

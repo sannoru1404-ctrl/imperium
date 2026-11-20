@@ -1,7 +1,7 @@
 import { UT, uname } from './data.js';
 import { $ } from './util.js';
 import { P } from './state.js';
-import { B, FIELD, FIGMAX, alive, rdist, angWrap, Hgt, formation, simStep, msg } from './battle-sim.js';
+import { B, FIELD, FIGMAX, alive, rdist, angWrap, Hgt, formation, simStep, msg, isAttacker, wallSide } from './battle-sim.js';
 import { updateHud } from './battle-hud.js';
 
 // ---------- 3D scene ----------
@@ -96,6 +96,7 @@ export function initScene(){
  // arrows
  S3.arrowM=new THREE.InstancedMesh(box(.06,.06,1.1),new THREE.MeshBasicMaterial({color:0x2a1c10}),500);S3.arrowM.count=0;S3.arrowM.frustumCulled=false;scene.add(S3.arrowM);
  S3.dm=dm;S3.col=new THREE.Color();S3.v=new THREE.Vector3();S3.ray=new THREE.Raycaster();S3.plane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+ if(B.siege)buildSiege(scene);
  // banners & rings
  B.regs.forEach(r=>{
   const c=document.createElement('canvas');c.width=128;c.height=72;
@@ -175,6 +176,10 @@ export function handleTap(cx,cy){
  const ndc=new THREE.Vector2((cx-rect.left)/rect.width*2-1,-((cy-rect.top)/rect.height)*2+1);
  S3.ray.setFromCamera(ndc,S3.camera);const hit=new THREE.Vector3();
  if(!S3.ray.ray.intersectPlane(S3.plane,hit))return;
+ if(B.siege&&!B.siege.open&&Math.hypot(hit.x,hit.z-B.siege.W)<14){
+  const rams=sel.filter(r=>isAttacker(r)&&r.body==='inf'&&!r.ranged);
+  if(rams.length){rams.forEach(r=>r.order={type:'gate'});marker(0,B.siege.W,0xffaa33);msg('Бить ворота!');return}
+ }
  const mx=sel.reduce((a,r)=>a+r.x,0)/sel.length,mz=sel.reduce((a,r)=>a+r.z,0)/sel.length;
  sel.forEach(r=>{r.order={type:'move',x:Math.max(-95,Math.min(95,hit.x+(r.x-mx))),z:Math.max(-FIELD-20,Math.min(FIELD+20,hit.z+(r.z-mz)))}});
  marker(hit.x,hit.z,0x6fd0ff);
@@ -191,7 +196,7 @@ export function fx3d(kind,a,b,dur){
   const n=Math.min(14,4+Math.ceil(a.figs.length/2));
   for(let i=0;i<n;i++){const f=a.figs[Math.floor(Math.random()*a.figs.length)]||a;
    const tf=b.figs[Math.floor(Math.random()*b.figs.length)]||b;
-   if(S3.arrows.length<480)S3.arrows.push({sx:f.x,sz:f.z,sy:Hgt(f.x,f.z)+1.6,ex:tf.x+(Math.random()-.5)*3,ez:tf.z+(Math.random()-.5)*3,t:-Math.random()*0.25,dur:dur*(0.92+Math.random()*0.16),hgt:6+rdist(a,b)*0.22})}
+   if(S3.arrows.length<480)S3.arrows.push({sx:f.x,sz:f.z,sy:Hgt(f.x,f.z)+(a.tower?9:1.6),ex:tf.x+(Math.random()-.5)*3,ez:tf.z+(Math.random()-.5)*3,t:-Math.random()*0.25,dur:dur*(0.92+Math.random()*0.16),hgt:6+rdist(a,b)*0.22})}
  }
 }
 export function addCorpse(f,r){
@@ -217,7 +222,9 @@ export function syncFigures(dt){
   }
   if(!r.figs.length)continue;
   const F=formation(r);const n=r.figs.length;const rows=Math.ceil(n/F.cols);
-  const fighting=r.state==='fight',moving=r.state==='move'||r.state==='rout';
+  const fighting=r.state==='fight'||r.state==='bash',moving=r.state==='move'||r.state==='rout';
+  const S=B.siege,onWall=S&&r.ranged&&!isAttacker(r)&&Math.abs(r.z-S.W)<7&&wallSide(r.z)===S.defSign;
+  const climbK=S&&r.climb>0?Math.min(1,r.climb/S.climbT):0;
   const sa=Math.sin(r.face),ca=Math.cos(r.face);
   const meshes=S3.meshes[r.t];
   for(let i=0;i<n;i++){
@@ -234,7 +241,7 @@ export function syncFigures(dt){
    const sx=r.x+lx*ca+lz*sa,sz=r.z-lx*sa+lz*ca;
    const k=Math.min(1,dt*(r.routing?2.5:3.5));
    f.x+=(sx-f.x)*k;f.z+=(sz-f.z)*k;
-   let y=Hgt(f.x,f.z),fa=r.face+f.j;
+   let y=Hgt(f.x,f.z)+(onWall?4.6:0)+(climbK&&row<2?climbK*5.2:0),fa=r.face+f.j;
    if(moving)y+=Math.abs(Math.sin(t*(r.cav?11:9)+f.ph))*(r.cav?0.25:0.12);
    let lunge=0;
    if(fighting&&row<2){lunge=Math.max(0,Math.sin(t*7+f.ph*3))*0.45;fa+=Math.sin(t*5+f.ph)*0.25}
@@ -286,6 +293,7 @@ export function syncOverlays(dt){
   S3.arrowM.setMatrixAt(n++,dm.matrix);
  }
  S3.arrowM.count=n;S3.arrowM.instanceMatrix.needsUpdate=true;
+ if(B.siege)syncSiege();
 }
 export function loop(now){
  if(!B||!S3)return;
@@ -296,4 +304,47 @@ export function loop(now){
  S3.R.render(S3.scene,S3.camera);
  B.hudT=(B.hudT||0)-rdt;if(B.hudT<=0){B.hudT=0.25;updateHud()}
  if(B&&S3)B.raf=requestAnimationFrame(loop);
+}
+
+// ---------- siege scenery: wall with crenellations, towers, gate, a town behind, ladders ----------
+function buildSiege(scene){
+ const S=B.siege,W=S.W,ds=S.defSign;
+ const stone=new THREE.MeshLambertMaterial({color:S.wall>1?0x9a9286:0x7a5a3a});
+ const segs=[];for(let x=-124;x<=124;x+=8)if(Math.abs(x)>8)segs.push(x);
+ const seg=new THREE.InstancedMesh(box(8.3,6,3,0,3,0),stone,segs.length);
+ const mer=new THREE.InstancedMesh(box(1.1,1.1,0.9,0,0,0),stone,segs.length*4);
+ const dm=S3.dm;let k=0;
+ segs.forEach((x,i)=>{const y=Hgt(x,W)-0.6;dm.position.set(x,y,W);dm.rotation.set(0,0,0);dm.scale.set(1,1,1);dm.updateMatrix();seg.setMatrixAt(i,dm.matrix);
+  for(let j=0;j<4;j++){dm.position.set(x-3+j*2,y+6.5,W-ds*1.1);dm.updateMatrix();mer.setMatrixAt(k++,dm.matrix)}});
+ seg.frustumCulled=mer.frustumCulled=false;scene.add(seg,mer);
+ const tw=new THREE.InstancedMesh(box(5.5,10,5.5,0,5,0),stone,S.towers.length);
+ const roof=new THREE.InstancedMesh((()=>{const g=new THREE.ConeGeometry(4.4,3.5,4);g.rotateY(Math.PI/4);g.translate(0,11.7,0);return g})(),new THREE.MeshLambertMaterial({color:0x6b2f22}),S.towers.length);
+ S.towers.forEach((t,i)=>{dm.position.set(t.x,Hgt(t.x,W)-0.6,W);dm.updateMatrix();tw.setMatrixAt(i,dm.matrix);roof.setMatrixAt(i,dm.matrix)});
+ tw.frustumCulled=roof.frustumCulled=false;scene.add(tw,roof);
+ // the gate and the arch above it
+ const gy=Hgt(0,W)-0.6;
+ S3.gate=new THREE.Mesh(box(12,5.5,1.4,0,2.75,0),new THREE.MeshLambertMaterial({color:0x5a3a1e}));S3.gate.position.set(0,gy,W);scene.add(S3.gate);
+ const arch=new THREE.Mesh(box(13,1.6,3.2,0,6.6,0),stone);arch.position.set(0,gy,W);scene.add(arch);
+ // a small town behind the wall
+ const N=22,hb=new THREE.InstancedMesh(box(4,3,4,0,1.5,0),new THREE.MeshLambertMaterial({color:0xd8c9a8}),N);
+ const hr=new THREE.InstancedMesh((()=>{const g=new THREE.ConeGeometry(3.4,2.6,4);g.rotateY(Math.PI/4);g.translate(0,4.3,0);return g})(),new THREE.MeshLambertMaterial({color:0x8a3b26}),N);
+ let seed=7;const rr=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+ for(let i=0;i<N;i++){const x=(rr()-.5)*170,z=W+ds*(30+rr()*40);dm.position.set(x,Hgt(x,z),z);dm.rotation.set(0,rr()*3,0);dm.updateMatrix();hb.setMatrixAt(i,dm.matrix);hr.setMatrixAt(i,dm.matrix)}
+ dm.rotation.set(0,0,0);hb.frustumCulled=hr.frustumCulled=false;scene.add(hb,hr);
+ // ladders, placed each frame where regiments climb
+ S3.ladders=new THREE.InstancedMesh(mergeGeo([box(.15,7,.15,-.45,3.5,0),box(.15,7,.15,.45,3.5,0),...[1,2.2,3.4,4.6,5.8].map(y=>box(.9,.1,.1,0,y,0))]),new THREE.MeshLambertMaterial({color:0x7a5a34}),60);
+ S3.ladders.count=0;S3.ladders.frustumCulled=false;scene.add(S3.ladders);
+}
+function syncSiege(){
+ const S=B.siege,W=S.W,dm=S3.dm;
+ if(S.open&&S3.gate.visible){S3.gate.visible=false;
+  const deb=new THREE.InstancedMesh(box(2.2,.4,1,0,.2,0),new THREE.MeshLambertMaterial({color:0x4a2f17}),8);
+  for(let i=0;i<8;i++){dm.position.set((i-4)*1.5,Hgt(0,W),W+(i%3-1)*1.5);dm.rotation.set(0,i*0.9,0);dm.updateMatrix();deb.setMatrixAt(i,dm.matrix)}
+  dm.rotation.set(0,0,0);S3.scene.add(deb)}
+ let n=0;
+ for(const r of B.regs){if(!(r.climb>0)||!alive(r))continue;
+  const s=wallSide(r.z);
+  for(const dx of [-3,0,3]){if(n>=60)break;dm.position.set(r.x+dx,Hgt(r.x,W)-0.4,W+s*2.2);dm.rotation.set(-s*0.32,0,0);dm.scale.set(1,1,1);dm.updateMatrix();S3.ladders.setMatrixAt(n++,dm.matrix)}}
+ dm.rotation.set(0,0,0);
+ S3.ladders.count=n;S3.ladders.instanceMatrix.needsUpdate=true;
 }

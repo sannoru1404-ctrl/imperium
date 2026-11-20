@@ -48,21 +48,35 @@ export function formation(r){
 export function canForm(r,f){return f==='line'||(UT[r.t].forms||[]).includes(f)}
 export function setForm(r,f){if(canForm(r,f))r.form=f}
 
-export function setupBattle(att,def,af,df,playerSide,place,battleSeed){
+export function setupBattle(att,def,af,df,playerSide,place,battleSeed,siege){
  const pu=playerSide==='att'?att:def, eu=playerSide==='att'?def:att;
  // the battle runs on its own seed, so it can be replayed; the campaign stream is restored afterwards
  const rngSeed=(battleSeed??Math.floor(rand()*4294967296))>>>0, campRng=getState();seed(rngSeed);
  B={rngSeed,campRng,regs:[],att,def,playerSide,af,df,pf:playerSide==='att'?af:df,ef:playerSide==='att'?df:af,place,time:0,pending:[],seed:rand()*10,
-  paused:true,speed:1,sel:new Set(),over:false,aiT:0,msgs:[],forests:[],hills:[]};
- for(let i=0;i<3;i++)B.forests.push({x:(rand()-.5)*130,z:(rand()-.5)*40,r:9+rand()*7});
- // one or two real hills: holding the high ground matters
- const nh=1+(rand()<0.6?1:0);
- for(let i=0;i<nh;i++)B.hills.push({x:(rand()-.5)*120,z:(rand()-.5)*70,r:18+rand()*12,h:6+rand()*5});
+  paused:true,speed:1,sel:new Set(),over:false,aiT:0,msgs:[],forests:[],hills:[],siege:null};
+ if(siege&&siege.wall>0){
+  // a walled town: the wall runs across the whole field in front of the defenders
+  const defSide=playerSide==='def'?'p':'e', defSign=defSide==='p'?1:-1;
+  B.siege={wall:siege.wall,ram:!!siege.ram,defSide,defSign,W:defSign*14,gateMax:siege.wall>1?100:60,gateHp:siege.wall>1?100:60,open:false,
+   towers:(siege.wall>1?[-45,-10,10,45]:[-10,10]).map(x=>({x,cool:rand()*3})),climbT:siege.wall>1?8:6};
+ } else {
+  for(let i=0;i<3;i++)B.forests.push({x:(rand()-.5)*130,z:(rand()-.5)*40,r:9+rand()*7});
+  // one or two real hills: holding the high ground matters
+  const nh=1+(rand()<0.6?1:0);
+  for(let i=0;i<nh;i++)B.hills.push({x:(rand()-.5)*120,z:(rand()-.5)*70,r:18+rand()*12,h:6+rand()*5});
+ }
  const deploy=(units,side,fac)=>{
   const zs=side==='p'?1:-1;
   const gen=units.filter(u=>UT[u.t].general);
   const mel=units.filter(u=>!UT[u.t].range&&UT[u.t].mov<=2),cav=units.filter(u=>UT[u.t].mov>2&&!UT[u.t].general),rng=units.filter(u=>UT[u.t].range&&UT[u.t].mov<=2);
   const line=(arr,z)=>arr.forEach((u,i)=>B.regs.push(makeReg(u,side,(i-(arr.length-1)/2)*15,z*zs,fac)));
+  if(B.siege&&B.siege.defSide===side){
+   // defenders: archers right behind the wall, infantry near the gate, horsemen in the town
+   const W=B.siege.W,s=B.siege.defSign;
+   const at=(arr,z,sp)=>arr.forEach((u,i)=>B.regs.push(makeReg(u,side,(i-(arr.length-1)/2)*sp,z,fac)));
+   at(rng,W+s*4,16);at(mel,W+s*14,13);at(cav,W+s*28,14);at(gen,W+s*36,14);
+   return;
+  }
   line(mel,38);line(rng,mel.length?54:40);
   const half=Math.max(mel.length,rng.length,1)*15/2;
   cav.forEach((u,i)=>B.regs.push(makeReg(u,side,(i%2?1:-1)*(half+12+Math.floor(i/2)*14),44*zs,fac)));
@@ -81,7 +95,52 @@ export function speedOf(r){
  if(r.form==='wall')s*=0.5;
  return s;
 }
+// ---------- siege helpers ----------
+export function wallSide(z){return B&&B.siege?Math.sign(z-B.siege.W)||1:0}
+export function isAttacker(r){return B.siege&&r.side!==B.siege.defSide}
+export function gatePoint(side){const S=B.siege;return {x:0,z:S.W+side*4}}
+function acrossWall(a,b){return B.siege&&wallSide(a.z)!==wallSide(b.z)}
+// Movement that respects the wall: through an open gate, over it by ladders (attacking foot), or blocked.
+function wallMove(r,tx,tz,dt,mult){
+ const S=B.siege,W=S.W,s0=wallSide(r.z);
+ if(wallSide(tz)===s0)return null;                       // target on our side: normal movement
+ if(S.open){                                              // gate broken: go through it
+  if(Math.abs(r.x)>4){basicMove(r,0,W+s0*3,dt,mult);return false}
+  basicMove(r,0,W-s0*4,dt,mult);r.passed=true;
+  if(wallSide(r.z)!==s0){return basicMove(r,tx,tz,dt,mult)}
+  return false;
+ }
+ const gd=Math.hypot(r.x,r.z-(W+s0*4));
+ if(isAttacker(r)&&!r.routing){
+  if(r.body==='inf'&&gd>10&&!r.ranged&&!(r.order&&r.order.type==='gate')){   // ladders
+   const cx=clamp(r.x+(tx-r.x)*0.3,-95,95);
+   if(Math.abs(r.z-(W+s0*2.5))>0.6||Math.abs(r.x-cx)>3){basicMove(r,cx,W+s0*2.5,dt,mult);r.climb=0;return false}
+   r.climb=(r.climb||0)+dt;r.wst='climb';turnTo(r,r.x,W-s0*5,dt,6);
+   if(r.climb>=S.climbT){r.z=W-s0*4;r.climb=0;r.passed=true;r.morale-=6;r.stam=Math.max(0,r.stam-15);
+    if(r.side==='p')msg('Лестницы! '+uname(r.t,r.fac)+' на стене');}
+   return false;
+  }
+  if(!r.ranged){                                          // batter the gate
+   if(gd>2){basicMove(r,0,W+s0*4,dt,mult);return false}
+   r.wst='bash';turnTo(r,0,W-s0*5,dt,6);
+   S.gateHp-=dt*(0.4+0.6*r.men/100)*(S.ram?4:1.5);
+   if(S.gateHp<=0&&!S.open){S.open=true;S.gateHp=0;msg('🚪 Ворота выбиты!')}
+   return false;
+  }
+ }
+ // defenders and horsemen wait at the closed gate
+ if(gd>2)basicMove(r,0,W+s0*4,dt,mult);
+ return false;
+}
+function basicMove(r,tx,tz,dt,mult){
+ const dx=tx-r.x,dz=tz-r.z,d=Math.hypot(dx,dz);if(d<0.4)return true;
+ const ux=dx/d,uz=dz/d;
+ const slope=(Hgt(r.x+ux*2,r.z+uz*2)-Hgt(r.x,r.z))/2;
+ const sp=speedOf(r)*mult*clamp(1-slope*1.2,0.65,1.15);const s=Math.min(d,sp*dt);
+ r.x+=ux*s;r.z+=uz*s;turnTo(r,tx,tz,dt,6);return d<=s+0.4;
+}
 export function moveTo(r,tx,tz,dt,mult=1){
+ if(B&&B.siege){const w=wallMove(r,tx,tz,dt,mult);if(w!==null)return w}
  const dx=tx-r.x,dz=tz-r.z,d=Math.hypot(dx,dz);if(d<0.4)return true;
  const ux=dx/d,uz=dz/d;
  const slope=(Hgt(r.x+ux*2,r.z+uz*2)-Hgt(r.x,r.z))/2;  // uphill slows, downhill speeds up a little
@@ -108,6 +167,8 @@ export function meleeHit(a,b,dt,burst){
  if(b.form==='wedge')def*=0.85;
  if(b.form==='loose')def*=0.8;
  if(b.braceT>0&&dot>0.35)def*=1.2;                 // a line that stood ready meets the attack braced
+ if(acrossWall(a,b))mult*=isAttacker(a)?0.7:1.2;     // fighting up a wall is hard
+ if(b.climb>0)mult*=1.25;                            // men on ladders are easy prey
  const eff=atk*mult*fl*heightMult(a,b)/def*(0.35+0.65*a.men/a.start);
  let dmg;
  if(burst){
@@ -131,6 +192,7 @@ export function fire(a,b){
  const dot=frontal(b,a);
  if(dot>0.35&&b.body==='inf'&&!b.ranged)dmg*=b.form==='wall'?0.5:0.75; // shields
  if(b.form==='loose')dmg*=0.5;
+ if(B.siege&&!isAttacker(b)&&acrossWall(a,b)&&Math.abs(b.z-B.siege.W)<8)dmg*=0.45;  // behind battlements
  const dur=0.9+rdist(a,b)/60;
  B.pending.push({t:dur,b,dmg});
  fx3d('volley',a,b,dur);
@@ -142,7 +204,9 @@ export function simStep(dt){
  B.pending=B.pending.filter(p=>{p.t-=dt;if(p.t<=0){if(alive(p.b)){p.b.men-=p.dmg;moraleHit(p.b,p.dmg)}return false}return true});
  for(const s of ['p','e'])B.cur[s]=B.regs.filter(r=>r.side===s&&alive(r)&&!r.routing).reduce((a,r)=>a+r.men,0);
  for(const r of B.regs)if(alive(r))r.inForest=B.forests.some(f=>Math.hypot(r.x-f.x,r.z-f.z)<f.r);
+ if(B.siege)siegeStep(dt);
  for(const r of B.regs){
+  r.ws=wallSide(r.z);r.passed=false;r.wst=null;
   if(!alive(r))continue;
   const prevFight=r.state==='fight';
   if(r.routing){
@@ -179,12 +243,17 @@ export function simStep(dt){
     else r.state='idle';
    }
   } else {
+   if(r.order&&r.order.type==='gate'){
+    // battering the gate: walk to it; once it is down, pour in
+    if(!B.siege||B.siege.open){r.order=null}
+    else{moveTo(r,0,B.siege.W+B.siege.defSign*8,dt);r.state='move'}
+   }
    if(r.order&&r.order.type==='move'){
     if(contact&&cd<CONTACT*0.85){tg=contact;r.order=null}
     else if(moveTo(r,r.order.x,r.order.z,dt)){r.order=null;r.state='idle';r.chargeT=0}
     else{r.state='move';r.chargeT+=dt}
    }
-   if(!(r.order&&r.order.type==='move')){
+   if(!(r.order&&(r.order.type==='move'||r.order.type==='gate'))){
     if(!tg)tg=contact;
     if(tg){
      const d=rdist(r,tg);
@@ -199,6 +268,7 @@ export function simStep(dt){
     } else {r.state='idle';r.chargeT=0}
    }
   }
+  if(r.wst)r.state=r.wst;else r.climb=0;
   // stamina, readiness, morale recovery
   if(r.state==='fight'){r.stam-=(r.form==='wall'?1.0:1.5)*dt;r.braceT=Math.max(0,r.braceT-dt)}
   else if(r.state==='move')r.stam-=(r.cav?1.0:0.8)*dt;
@@ -225,6 +295,9 @@ export function simStep(dt){
    a.x-=ux*p*wa;a.z-=uz*p*wa;b.x+=ux*p*wb;b.z+=uz*p*wb}
  }
  for(const r of al){r.x=clamp(r.x,-100,100);if(!r.routing)r.z=clamp(r.z,-FIELD-25,FIELD+25)}
+ if(B.siege)for(const r of al){ // nobody walks through the wall except by gate or ladder
+  if(wallSide(r.z)!==r.ws&&!r.passed&&!(B.siege.open&&Math.abs(r.x)<6))r.z=B.siege.W+r.ws*2.5;
+ }
  B.aiT-=dt;if(B.aiT<=0){B.aiT=0.6;aiThink()}
  const act=s=>B.regs.some(r=>r.side===s&&alive(r)&&!r.routing);
  if(!act('e'))finishBattle('p');else if(!act('p'))finishBattle('e');
@@ -236,10 +309,51 @@ function generalLost(g,killed){
  msg(g.side==='p'?(killed?'☠ Пал наш воевода! Войско дрогнуло':'⚠ Наш воевода бежит!'):(killed?'⚔ Вражеский воевода убит!':'🏳 Вражеский воевода бежит!'));
 }
 
+// towers on the wall shoot at attackers in reach
+function siegeStep(dt){
+ const S=B.siege;
+ for(const t of S.towers){
+  t.cool-=dt;if(t.cool>0)continue;
+  let best=null,bd=48;
+  for(const r of B.regs)if(alive(r)&&!r.routing&&isAttacker(r)){const d=Math.hypot(r.x-t.x,r.z-S.W);if(d<bd){bd=d;best=r}}
+  if(!best){t.cool=1;continue}
+  t.cool=3.5+rand();
+  let dmg=1.6*7/Math.max(1,UT[best.t].def+best.defB);if(best.form==='loose')dmg*=0.6;
+  const dur=0.8+bd/60;B.pending.push({t:dur,b:best,dmg});
+  fx3d('volley',{x:t.x,z:S.W,figs:[{x:t.x,z:S.W},{x:t.x+1,z:S.W}],tower:true},best,dur);
+ }
+}
+function siegeAI(mine,foes){
+ const S=B.siege;
+ if(S.defSide==='e'){
+  // defending the town: archers man the wall, the rest hold until the enemy is inside or on the ladders
+  const inside=foes.filter(f=>wallSide(f.z)===S.defSign||f.climb>0||(S.open&&Math.hypot(f.x,f.z-S.W)<30));
+  for(const r of mine){
+   r.skirmish=false;if(!r.station)r.station={x:r.x,z:r.z};
+   if(canForm(r,'wall'))r.form=inside.length?'line':'wall';
+   if(r.ranged){r.order=null;continue}
+   if(r.state==='fight')continue;
+   let n=null,nd=1e9;for(const f of inside){const d=rdist(r,f);if(d<nd){nd=d;n=f}}
+   if(n&&(nd<45||r.cav))r.order={type:'attack',tg:n};else r.order={type:'move',x:r.station.x,z:r.station.z};
+  }
+ } else {
+  // storming the town: a third of the foot batters the gate, the rest climb; horsemen wait for the gate
+  let i=0;
+  for(const r of mine){
+   if(r.state==='fight'||r.state==='climb'||r.state==='bash')continue;
+   if(r.ranged){let n=null,nd=1e9;for(const f of foes){const d=rdist(r,f);if(d<nd){nd=d;n=f}}r.order=n?{type:'attack',tg:n}:null;continue}
+   if(!S.open&&(r.cav||r.gen)){r.order={type:'move',x:r.x,z:S.W-S.defSign*30};continue}
+   if(!S.open&&r.body==='inf'&&(i++%3===0||S.ram&&i%2===0)){r.order={type:'gate'};continue}
+   let n=null,nd=1e9;for(const f of foes){const d=rdist(r,f);if(d<nd){nd=d;n=f}}
+   if(n)r.order={type:'attack',tg:n};
+  }
+ }
+}
 // ---------- enemy AI ----------
 export function aiThink(){
  const mine=B.regs.filter(r=>r.side==='e'&&alive(r)&&!r.routing),foes=B.regs.filter(r=>r.side==='p'&&alive(r)&&!r.routing);
  if(!foes.length)return;
+ if(B.siege){siegeAI(mine,foes);return}
  const near=foes.some(f=>mine.some(m=>rdist(f,m)<45));
  const hold=B.playerSide==='att'&&B.time<40&&!near;   // defenders wait on their line
  const targeted=new Map();
@@ -279,22 +393,22 @@ export function aiThink(){
 export function msg(t){if(!B)return;B.msgs.push({t,life:3.5});if(B.msgs.length>3)B.msgs.shift()}
 
 // ---------- start / finish ----------
-export function tactical(att,def,af,df,playerSide,place){
+export function tactical(att,def,af,df,playerSide,place,siege){
  return new Promise(resolve=>{
-  setupBattle(att,def,af,df,playerSide,place);
+  setupBattle(att,def,af,df,playerSide,place,undefined,siege);
   B.resolve=resolve;
   let ok=false;
   try{ok=initScene()}catch(e){console.error(e);ok=false}
   if(!ok){
    cleanupScene();
-   setState(B.campRng);const res=autoResolve(att,def,1.2);B=null;
+   setState(B.campRng);const res=siege&&siege.wall?autoResolve(att,def,1+0.5*siege.wall,1+0.15*siege.wall):autoResolve(att,def,1.2);B=null;
    ask('3D недоступно','<p>Не удалось запустить 3D на этом устройстве — битва рассчитана автоматически.</p>',[['ok','Далее',1]]).then(()=>resolve(res));
    return;
   }
   $('battle').style.display='block';
   $('bTitle').textContent='⚔ '+place;
   onResize();
-  msg(playerSide==='att'?'Ты атакуешь. Расставь войска и жми ▶':'Враг наступает! Расставь войска и жми ▶');
+  msg(B.siege?(playerSide==='att'?'Штурм! Пехота полезет на стены, у ворот — бей ворота. Жми ▶':'Враг штурмует город! Держи стены. Жми ▶'):playerSide==='att'?'Ты атакуешь. Расставь войска и жми ▶':'Враг наступает! Расставь войска и жми ▶');
   buildCards();updateHud();
   B.last=performance.now();B.raf=requestAnimationFrame(loop);
  });
