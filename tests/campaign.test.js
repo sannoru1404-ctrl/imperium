@@ -7,22 +7,30 @@ import { setAutoAnswer } from '../src/js/ui.js';
 import { str, garUnits, adj, P } from '../src/js/state.js';
 import { PLAYER, FACT, UT } from '../src/js/data.js';
 
-setAutoAnswer(() => 'auto');
+setAutoAnswer((t, btns) => (btns.some(b => b[0] === 'war') ? 'war' : 'auto'));
 const N = Number(process.env.CAMPAIGNS || 100), MAX_TURNS = 80;
 
 async function playerBot() {
   const G = st.G;
-  // recruit in frontier provinces
+  const R = await import('../src/js/rules.js');
+  // economy: research, a decree when rich, one building per year in the capital or a big town
+  if (!G.fac[PLAYER].res) { const t = Object.keys((await import('../src/js/data.js')).TECH).find(id => R.techAvailable(PLAYER, id)); if (t) R.setResearch(PLAYER, t); }
+  if (R.edictOf(PLAYER) === 'none' && G.fac[PLAYER].gold > 1500) R.setEdict(PLAYER, 'trade');
+  for (const p of G.prov.filter(p => p.owner === PLAYER && !p.cons)) {
+    for (const b of ['barracks', 'farm', 'market', 'church', 'range', 'stable']) { const o = R.buildOptions(p).find(x => x.b === b); if (o && o.ok && G.fac[PLAYER].gold - o.cost > 900) { R.startBuild(p, b); break; } }
+  }
+  // recruit in frontier lands: a general first, then troops the buildings allow
   for (const p of G.prov.filter(p => p.owner === PLAYER)) {
     const front = adj(p.id).some(a => P(a).owner !== PLAYER);
     if (!front) continue;
     G.sel = p.id;
-    const plan = ['spear', 'druzh', 'arch', 'knight', 'druzh', 'hasb', 'spear'];
-    if (!p.army.some(u => UT[u.t].general) && G.fac[PLAYER].gold > 600) recruit('gen');
-    while (p.army.length < 8 && p.rec < p.lvl) { const t = plan[p.army.length % plan.length]; if (G.fac[PLAYER].gold < UT[t].cost + 150) break; recruit(t); }
+    if (!p.army.some(u => UT[u.t].general) && R.generals(PLAYER) < R.maxGenerals(PLAYER) && G.fac[PLAYER].gold > 600) recruit('gen');
+    const plan = ['spear', 'druzh', 'arch', 'knight', 'druzh', 'hasb', 'spear', 'mil'].filter(t => R.unitAvailable(p, t));
+    while (plan.length && p.army.length < 8 && p.rec < p.lvl) { const t = plan[p.army.length % plan.length]; if (G.fac[PLAYER].gold < R.unitCost(PLAYER, t) + 150) break; recruit(t); }
   }
-  // attack when clearly stronger, never leave Rome empty early
+  // attack when clearly stronger, with a general, never leave the capital empty early
   for (const p of G.prov.filter(p => p.owner === PLAYER && p.army.length && !p.moved)) {
+    if (!p.army.some(u => UT[u.t].general)) continue;
     if (p.id === st.capOf(PLAYER) && p.army.length < 6) continue;
     const t = adj(p.id).map(P).filter(x => x.owner !== PLAYER)
       .sort((a, b) => (str(a.army) + str(garUnits(a), 1.2)) - (str(b.army) + str(garUnits(b), 1.2)))[0];

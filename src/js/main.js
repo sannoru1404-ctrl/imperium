@@ -4,8 +4,8 @@ import { endTurn } from './turn.js';
 import { tapProv, togglePick, openRecruit, recruit, upgrade } from './map.js';
 import { endBattle, bAuto, bRetreat } from './battle-sim.js';
 import { cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt, bForm } from './battle-hud.js';
-import { closeModal, showHelp, showSaves, saveTo, loadFrom, showNewGame, startGame } from './ui.js';
-import { zoomBy, centerOn } from './map.js';
+import { closeModal, showHelp, showSaves, saveTo, loadFrom, showNewGame, startGame, showRealm, pickEdict, pickTech, diplo } from './ui.js';
+import { zoomBy, centerOn, setTab, openBuild, doBuild } from './map.js';
 import { G, capOf } from './state.js';
 import { PLAYER } from './data.js';
 import { $ } from './util.js';
@@ -14,7 +14,7 @@ Object.assign(window, {
   newGame: () => newGame(), loadGame, endTurn,
   tapProv, togglePick, openRecruit, recruit, upgrade,
   endBattle, bAuto, bRetreat, cardTap, bPause, bSpeed, bSelAll, bCharge, bHalt, bForm,
-  closeModal, showHelp, showSaves, saveTo, loadFrom, showNewGame, startGame,
+  closeModal, showHelp, showSaves, saveTo, loadFrom, showNewGame, startGame, showRealm, pickEdict, pickTech, diplo, setTab, openBuild, doBuild,
   mapZoom: f => zoomBy(f), mapHome: () => centerOn(capOf(PLAYER) || G.prov.find(p => p.owner === PLAYER).id, 440),
 });
 

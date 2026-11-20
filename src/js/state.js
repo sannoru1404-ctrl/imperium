@@ -2,6 +2,7 @@ import { seed, getState, setState } from './rng.js';
 import { FACT, UT, PROV_DEF, ADJ, START_ARMY, START_ARMY_CULT, START_GOLD, PLAYER, setPlayer, START_YEAR } from './data.js';
 import { $ } from './util.js';
 import { render } from './map.js';
+import { initDiplo } from './diplo.js';
 
 export let G=null; // game state
 export let uid=1;
@@ -26,11 +27,20 @@ export function newGame(gameSeed,faction){
   (FACT[f].major?START_ARMY.major:START_ARMY.minor).map(conv(f)).forEach(t=>cap.army.push(mk(t)));
   if(FACT[f].major){const second=own.filter(p=>p!==cap).sort((a,b)=>b.tier-a.tier)[0];if(second)START_ARMY.major2.map(conv(f)).forEach(t=>second.army.push(mk(t)))}
  }
+ // starting buildings and the culture each land belongs to
+ const start=(p,cap)=>{const f=p.owner,maj=f!=='rebel'&&FACT[f].major;
+  if(cap)return maj?{barracks:2,range:1,stable:2,walls:1}:{barracks:1,range:1,stable:1,walls:1};
+  return p.tier>=3?{barracks:1,market:1,walls:1}:p.tier===2?{barracks:1,farm:1}:{farm:1}};
+ G.prov.forEach(p=>{if(p.owner!=='rebel')p.cult0=FACT[p.owner].cult});
+ G.prov.forEach(p=>{if(p.owner==='rebel'){let best=null,bd=1e9;for(const q of G.prov)if(q.owner!=='rebel'){const d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;best=q}}p.cult0=best?best.cult0:'west'}});
+ for(const f in G.fac){G.fac[f].tech={};G.fac[f].edict='none';G.fac[f].res=null}
  G.prov.forEach(p=>{
   const cap=capOf(p.owner)===p.id;
+  p.b=start(p,cap);p.cons=null;p.unrest=0;
   p.gar=p.owner==='rebel'?3+p.tier:cap?4:2;
   if(p.owner==='rebel'&&p.tier>=2)START_ARMY.rebelBig.forEach(t=>p.army.push(mk(t)));
  });
+ initDiplo();
  $('title').style.display='none';
  addLog(`Лето ${START_YEAR}-е. ${FACT[PLAYER].n}: ${FACT[PLAYER].d||'собирай земли'}`);
  render(true);
@@ -61,12 +71,7 @@ export function loadSlot(slot){
 export function loadGame(){if(!loadSlot('auto'))newGame()}
 
 export function addLog(t){G.log.unshift(t);G.log=G.log.slice(0,4);}
-export function provIncome(p){return p.occ>0?0:Math.round(p.base*(1+0.5*(p.lvl-1)))}
-export function income(f){
- let inc=0,up=0;
- G.prov.forEach(p=>{if(p.owner===f){inc+=provIncome(p);up+=p.army.length*20}});
- return {inc,up,net:inc-up};
-}
+export { provIncome, income } from './rules.js';
 export function str(units,bonus=1){return units.reduce((s,u)=>{const d=UT[u.t];return s+(d.atk+d.def+(d.range?2:0)+(d.mov>2?2:0)+(d.general?3:0))*u.hp/100},0)*bonus}
 export function garUnits(p){const a=[];for(let i=0;i<p.gar;i++){const u=mk('mil');u.gar=true;a.push(u)}return a}
 

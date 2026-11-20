@@ -80,7 +80,7 @@ export const RECRUIT_BY_CULT={
 export const RECRUIT=new Proxy({},{get:(_,f)=>f==='rebel'?['mil','spear','arch']:RECRUIT_BY_CULT[(FACT[f]||FACT.rebel).cult]});
 
 // Regions come from the generated map: [id, name, x, y, owner, tier]
-export const TIER_INCOME={1:130,2:190,3:260};
+export const TIER_INCOME={1:90,2:140,3:200};
 export const PROV_DEF=REGION_DEF.map(([id,n,x,y,owner,tier])=>[id,n,x,y,owner,TIER_INCOME[tier],tier]);
 export const ADJ=ADJ_DEF;
 
@@ -100,4 +100,57 @@ export const AI={attackRatio:1.45,majorRatio:1.5,  // AI kingdoms are wary of at
  maxAttacksPerTurn:3,   // each AI faction starts at most this many battles a year
  occupationTurns:2};    // a conquered land pays no taxes for this many years
 // Independent lands: garrison size and a small standing force that regrows
-export const REBELS={garBonus:2,armyEvery:3,armyMax:3,unit:['spear','arch','druzh']};
+export const REBELS={garBonus:1,armyEvery:4,armyMax:2,unit:['spear','arch','druzh']};
+
+// ===================== ECONOMY (Rome II-style) =====================
+// Building chains; a region has (settlement level + 3) slots. Effects:
+// unlock: unit types recruitable here · inc: +share of region income · gold: flat gold
+// order: public order · gar: extra garrison · wall: walls level (sieges)
+export const BUILDINGS={
+ barracks:{n:'Казармы',     i:'⚔️',lv:[{cost:300,unlock:['spear']},{cost:650,unlock:['druzh']}]},
+ range:   {n:'Стрельбище',  i:'🏹',lv:[{cost:300,unlock:['arch']},{cost:650,unlock:['xbow']}]},
+ stable:  {n:'Конюшни',     i:'🐎',lv:[{cost:400,unlock:['hasb']},{cost:900,unlock:['knight']}]},
+ farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.1},{cost:500,inc:0.2},{cost:900,inc:0.3}]},
+ market:  {n:'Торг',        i:'⚖️',lv:[{cost:350,gold:30},{cost:700,gold:60},{cost:1200,gold:100}]},
+ church:  {n:'Храм',        i:'⛪',lv:[{cost:300,order:10},{cost:650,order:20},{cost:1100,order:30}]},
+ walls:   {n:'Стены',       i:'🧱',lv:[{cost:400,gar:2,wall:1},{cost:900,gar:4,wall:2}]},
+};
+// which building level a unit needs (mil and gen need nothing)
+export const UNIT_REQ={spear:['barracks',1],druzh:['barracks',2],arch:['range',1],xbow:['range',2],hasb:['stable',1],knight:['stable',2]};
+export const GEN_UPKEEP=50, UNIT_UPKEEP=25;
+export const MAX_ARMY=12;   // regiments in one army (incl. the general)
+
+// One active decree per state; changing it costs gold.
+export const EDICTS={
+ none: {n:'Без указа',i:'—',d:'Ничего не меняется.'},
+ tax:  {n:'Подати',i:'💰',d:'Доход +20%, порядок −15 во всех землях.'},
+ peace:{n:'Правда и покой',i:'🕊',d:'Порядок +15 во всех землях, доход −5%.'},
+ levy: {n:'Ополчение',i:'⚔️',d:'Найм отрядов на 25% дешевле, гарнизоны +1.'},
+ trade:{n:'Торговые льготы',i:'⚖️',d:'Торги приносят на 30% больше.'},
+};
+export const EDICT_COST=200;
+
+// Technologies: two branches. Research points per year: 8 + lands + 2 per temple level.
+export const TECH={
+ mil1:{n:'Кольчуга',br:'mil',cost:80,d:'+1 к защите всех отрядов в бою.'},
+ mil2:{n:'Рыцарство',br:'mil',req:'mil1',cost:170,d:'Натиск конницы сильнее на 20%.'},
+ mil3:{n:'Осадное дело',br:'mil',req:'mil2',cost:280,d:'Вражеские стены и гарнизоны слабее на 25%.'},
+ mil4:{n:'Постоянное войско',br:'mil',req:'mil3',cost:400,d:'Содержание войск −25%.'},
+ civ1:{n:'Трёхполье',br:'civ',cost:80,d:'Доход земель +10%.'},
+ civ2:{n:'Торговые пути',br:'civ',req:'civ1',cost:170,d:'Торги приносят на 30% больше.'},
+ civ3:{n:'Право и суд',br:'civ',req:'civ2',cost:280,d:'Порядок +10 во всех землях.'},
+ civ4:{n:'Каменное зодчество',br:'civ',req:'civ3',cost:400,d:'Постройки дешевле на 25%.'},
+};
+// Public order and revolts
+export const ORDER={base:10,occupied:-40,foreign:-15,perGarrison:3,maxGarrison:15,poorBelow:-20,revoltAt:10};
+// Army limit: number of generals a state may field
+export function maxGeneralsFor(regions){return Math.min(10,1+Math.floor(regions/4))}
+
+// ===================== DIPLOMACY =====================
+// Relations between states: 'war' | 'peace' | 'trade' (peace + trade deal) | 'ally' (alliance, includes trade).
+// Independent lands ('rebel') can always be attacked. Wars standing in 1100 (approximate):
+export const START_WARS=[['rus','cuman'],['byz','sel'],['cru','fat'],['cru','sel'],['cas','alm'],['hun','cro'],['sic','byz'],['eng','fra']];
+export const START_ALLIES=[['byz','ven'],['hre','boh'],['rus','pol']];
+export const START_TRADE=[['ven','sic'],['den','swe'],['novg','swe'],['eng','den'],['rus','byz']];
+export const SETTLE_COST=600;      // ×current level to grow a settlement
+export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.06,peaceChance:0.12,minWarYears:4};

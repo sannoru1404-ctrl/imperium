@@ -1,8 +1,10 @@
-import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI } from './data.js';
+import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI, BUILDINGS, UNIT_REQ , MAX_ARMY, SETTLE_COST, UNIT_UPKEEP, GEN_UPKEEP } from './data.js';
 import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS } from './mapdata.js';
 import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
-import { checkEnd, autoResolve } from './turn.js';
+import { checkEnd, autoResolve, siegeMods } from './turn.js';
+import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
+import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost } from './rules.js';
 import { B, tactical } from './battle-sim.js';
 import { modal, closeModal, ask, toast } from './ui.js';
 
@@ -109,28 +111,55 @@ export function drawMap(){
  const dyn=$('mDyn');if(dyn)dyn.innerHTML=s;
 }
 export function pickedUnits(p){return p.army.filter(u=>G.pick.has(u.id))}
+export let PANEL_TAB='army';
+export function setTab(t){PANEL_TAB=t;drawPanel()}
+function orderBadge(p){
+ const o=orderOf(p),col=o>=20?'#7bc96f':o>=0?'#e0b34a':'#e57373';
+ return `<span title="Порядок" style="color:${col}">⚖${o>0?'+':''}${o}</span>${p.unrest>3?` <span style="color:#e57373" title="Недовольство">🔥${Math.round(p.unrest)}/10</span>`:''}`;
+}
 export function drawPanel(){
  const p=G.sel?P(G.sel):null;
- if(!p){$('pInfo').innerHTML=`<div class="small">Двигай карту пальцем, двумя пальцами — масштаб. Нажми на свою землю с войском, затем на соседнюю — поход или атака.</div>`;return}
+ if(!p){$('pInfo').innerHTML=`<div class="small">Двигай карту пальцем, двумя пальцами — масштаб. Нажми на свою землю с войском, затем на соседнюю — поход или атака. В походы ходят только войска с воеводой.</div>`;return}
  const own=p.owner===PLAYER, fc=FACT[p.owner];
- let h=`<div class="row" style="justify-content:space-between"><div><span class="h" style="font-size:17px;color:${fc.tc||fc.c};filter:brightness(1.4)">${p.n}</span> <span class="small">· ${fc.n} · ур. ${p.lvl}</span></div>
- <div class="small">💰${p.occ>0?'0 (разорена, '+p.occ+')':provIncome(p)} · 🔱${p.gar}</div></div>`;
- if(p.army.length){
-  h+=`<div style="margin-top:6px">`;
-  if(own)h+=`<div class="small">${p.moved?'Армия уже ходила.':'Нажимай на отряды, чтобы выбрать, кто пойдёт:'}</div>`;
-  p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${uname(u.t,p.owner)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
-  h+=`</div><div class="small" style="margin-top:4px">Сила армии: ${Math.round(str(p.army))}</div>`;
- } else h+=`<div class="small" style="margin-top:6px">Армии нет. Гарнизон: ${p.gar} ополч.</div>`;
- if(own){
-  const upc=400*p.lvl;
-  h+=`<div class="row" style="margin-top:10px"><button onclick="openRecruit()" ${p.army.length>=8||p.rec>=p.lvl?'disabled':''}>⚒ Нанять (${p.lvl-p.rec})</button>
-  ${p.lvl<3?`<button onclick="upgrade()" ${G.fac[PLAYER].gold<upc?'disabled':''}>🏛 Улучшить · ${upc}</button>`:''}</div>`;
+ const w=wallLevel(p);
+ let h=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h" style="font-size:17px;color:${fc.tc||fc.c};filter:brightness(1.4)">${p.n}</span> <span class="small">· ${fc.n} · ур. ${p.lvl}${w?` · ${w>1?'🏰':'🧱'}`:''}</span></div>
+ <div class="small" style="white-space:nowrap">💰${p.occ>0?'0':provIncome(p)} · 🔱${p.gar}${own?' · '+orderBadge(p):''}</div></div>`;
+ if(own)h+=`<div class="tabs"><button class="${PANEL_TAB==='army'?'on':''}" onclick="setTab('army')">⚔ Войско</button><button class="${PANEL_TAB==='build'?'on':''}" onclick="setTab('build')">🏗 Постройки ${usedSlots(p)}/${slots(p)}</button></div>`;
+ if(!own||PANEL_TAB==='army'){
+  if(p.army.length){
+   const gen=p.army.some(u=>UT[u.t].general);
+   h+=`<div style="margin-top:6px">`;
+   if(own)h+=`<div class="small">${p.moved?'Войско уже ходило в этом году.':gen?'Выбери отряды для похода и нажми на соседнюю землю:':'Без воеводы войско ходит только по своим землям.'}</div>`;
+   p.army.forEach(u=>{h+=`<span class="chip ${own&&G.pick.has(u.id)?'sel':''}" ${own?`onclick="togglePick(${u.id})"`:''}>${UT[u.t].i} ${uname(u.t,p.owner)} <span class="hpb"><i style="width:${u.hp}%"></i></span></span>`});
+   h+=`</div><div class="small" style="margin-top:4px">Сила войска: ${Math.round(str(p.army))}${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
+  } else h+=`<div class="small" style="margin-top:6px">Войска нет. Гарнизон: ${p.gar} ополч.${own?` · воеводы ${generals(PLAYER)}/${maxGenerals(PLAYER)}`:''}</div>`;
+  if(own){
+   const upc=SETTLE_COST*p.lvl;
+   h+=`<div class="row" style="margin-top:10px"><button onclick="openRecruit()" ${p.army.length>=MAX_ARMY||p.rec>=p.lvl?'disabled':''}>⚒ Нанять (${p.lvl-p.rec})</button>
+   ${p.lvl<3?`<button onclick="upgrade()" ${G.fac[PLAYER].gold<upc?'disabled':''}>🏛 Город ур. ${p.lvl+1} · ${upc}</button>`:''}</div>`;
+  } else {
+   const neigh=adj(p.id).some(a=>P(a).owner===PLAYER&&P(a).army.length);
+   if(p.owner!=='rebel'){const r=rel(PLAYER,p.owner);h+=`<div class="small" style="margin-top:6px">${REL_I[r]} С тобой: <b>${REL_N[r]}</b> · <a href="#" onclick="event.preventDefault();showRealm('diplo')" style="color:var(--gold)">дипломатия</a></div>`}
+   h+=`<div class="small" style="margin-top:6px">Оборона: ${Math.round(str(p.army)+str(garUnits(p),1.2))}${w?` (стены усиливают защитников)`:''}${neigh?' — выбери своё соседнее войско с воеводой и атакуй.':''}</div>`;
+  }
  } else {
-  const neigh=adj(p.id).some(a=>P(a).owner===PLAYER&&P(a).army.length);
-  h+=`<div class="small" style="margin-top:6px">Оборона: ${Math.round(str(p.army)+str(garUnits(p),1.2))}${neigh?' — выбери свою соседнюю армию и атакуй.':''}</div>`;
+  // buildings tab
+  const B=p.b||{};
+  h+=`<div style="margin-top:6px">`+(Object.keys(B).filter(k=>B[k]).map(k=>`<span class="chip">${BUILDINGS[k].i} ${BUILDINGS[k].n} ${B[k]}</span>`).join('')||'<span class="small">Построек нет.</span>');
+  if(p.cons)h+=`<span class="chip" style="opacity:.7">🚧 ${BUILDINGS[p.cons.b].n} ${p.cons.lvl} — к следующему году</span>`;
+  h+=`</div><div class="small" style="margin-top:6px">Мест: ${usedSlots(p)} из ${slots(p)} (больше мест — у города выше уровнем). Одна стройка в год.</div>`;
+  h+=`<div class="row" style="margin-top:8px"><button onclick="openBuild()" ${p.cons?'disabled':''}>🏗 Строить</button></div>`;
  }
  $('pInfo').innerHTML=h;
 }
+export function openBuild(){
+ const p=P(G.sel);if(!p||p.owner!==PLAYER)return;
+ const h=buildOptions(p).map(o=>{const d=BUILDINGS[o.b];
+  return `<div class="rec"><div>${d.i} <b>${d.n} ${o.lvl}</b><div class="small">${buildingEffect(o.b,o.lvl)}</div></div>
+  <button onclick="doBuild('${o.b}')" ${o.ok?'':'disabled'}>${o.ok?'💰'+o.cost:o.why}</button></div>`}).join('');
+ modal(`<h2>Стройка: ${p.n}</h2><p class="small">Мест: ${usedSlots(p)}/${slots(p)} · Готово будет к следующему году.</p>${h}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Закрыть</button></div>`);
+}
+export function doBuild(b){const p=P(G.sel);if(startBuild(p,b)){closeModal();addLog(`${p.n}: заложено — ${BUILDINGS[b].n.toLowerCase()}.`);render()}}
 export function togglePick(id){G.pick.has(id)?G.pick.delete(id):G.pick.add(id);render()}
 
 export function tapProv(id){
@@ -143,21 +172,29 @@ export function tapProv(id){
 export async function moveArmy(from,to){
  const units=pickedUnits(from);
  if(to.owner===PLAYER){
-  if(to.army.length+units.length>8){toast('В армии не больше 8 отрядов.');return}
+  if(to.army.length+units.length>MAX_ARMY){toast(`В войске не больше ${MAX_ARMY} отрядов.`);return}
   if(units.some(u=>UT[u.t].general)&&to.army.some(u=>UT[u.t].general)){toast('В одной армии может быть только один воевода.');return}
   from.army=from.army.filter(u=>!G.pick.has(u.id));
   to.army.push(...units);to.moved=true;
   G.sel=to.id;G.pick=new Set();addLog(`Армия перешла в ${to.n}.`);render();return;
  }
+ if(!units.some(u=>UT[u.t].general)){toast('В поход на чужие земли войско идёт только с воеводой.');return}
+ if(to.owner!=='rebel'&&!atWar(PLAYER,to.owner)){
+  const r=rel(PLAYER,to.owner);
+  const ok=await ask(`Объявить войну?`,`<p>${FACT[to.owner].n} сейчас: <b>${REL_N[r]}</b>. Напасть на ${to.n} — значит объявить войну.${r!=='peace'?' Разрыв договора подорвёт доверие к тебе у всех держав.':''}</p>`,[['war','⚔ Объявить войну',1],['no','Отмена']]);
+  if(ok!=='war')return;
+  declareWar(PLAYER,to.owner);
+ }
  const def=[...to.army,...garUnits(to)];
  if(!def.length){from.army=from.army.filter(u=>!G.pick.has(u.id));capture(to,PLAYER,units);G.sel=to.id;G.pick=new Set();render();checkEnd();return}
- const sa=Math.round(str(units)),sd=Math.round(str(to.army)+str(garUnits(to),1.2));
+ const sm=siegeMods(to,PLAYER);
+ const sa=Math.round(str(units)),sd=Math.round(str(to.army)*sm[1]+str(garUnits(to),sm[0]));
  const ch=await ask(`Битва за ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${units.length} отр.)</p><p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${to.army.length} отр. + ${to.gar} ополч.)</p>${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
   [['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт'],['no','Отмена']]);
  if(ch==='no')return;
  from.army=from.army.filter(u=>!G.pick.has(u.id));
  G.pick=new Set();
- const res=ch==='fight'?await tactical(units,def,PLAYER,to.owner,'att',to.n):autoResolve(units,def,1);
+ const res=ch==='fight'?await tactical(units,def,PLAYER,to.owner,'att',to.n):autoResolve(units,def,...sm);
  applyBattle(from,to,PLAYER,res);
  G.sel=to.owner===PLAYER?to.id:from.id;
  render();checkEnd();
@@ -205,19 +242,23 @@ export function unitTraits(t){
 }
 export function openRecruit(){
  const p=P(G.sel);
- const hasGen=p.army.some(u=>UT[u.t].general);
+ const hasGen=p.army.some(u=>UT[u.t].general),genFull=generals(PLAYER)>=maxGenerals(PLAYER);
  let h='';
- RECRUIT[PLAYER].forEach(t=>{const d=UT[t];const blocked=d.general&&hasGen;
+ RECRUIT[PLAYER].forEach(t=>{const d=UT[t];const cost=unitCost(PLAYER,t);
+  let why='';
+  if(d.general&&hasGen)why='есть';else if(d.general&&genFull)why='лимит';
+  else if(!unitAvailable(p,t)){const r=UNIT_REQ[t];why=`нужны ${BUILDINGS[r[0]].n.toLowerCase()} ${r[1]}`}
+  else if(G.fac[PLAYER].gold<cost)why='мало золота';
   h+=`<div class="rec"><div>${d.i} <b>${uname(t,PLAYER)}</b><div class="small">Атк ${d.atk} · Защ ${d.def} · ${d.mov>2?'конные':'пешие'}${unitTraits(t)?' · '+unitTraits(t):''}</div></div>
- <button onclick="recruit('${t}')" ${G.fac[PLAYER].gold<d.cost||blocked?'disabled':''}>${blocked?'есть':'💰'+d.cost}</button></div>`});
- modal(`<h2>Набор: ${p.n}</h2><p class="small">Содержание: 20 золота за отряд в ход. Осталось наймов в этом году: ${p.lvl-p.rec}</p>${h}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Закрыть</button></div>`);
+ <button onclick="recruit('${t}')" ${why?'disabled':''} style="white-space:nowrap">${why||'💰'+cost}</button></div>`});
+ modal(`<h2>Набор: ${p.n}</h2><p class="small">Содержание: ${UNIT_UPKEEP} в год за отряд, ${GEN_UPKEEP} за воеводу. Воевод: ${generals(PLAYER)} из ${maxGenerals(PLAYER)} (растёт с числом земель). Наймов в этом году: ${p.lvl-p.rec}.</p>${h}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Закрыть</button></div>`);
 }
 export function recruit(t){
- const p=P(G.sel),d=UT[t];
- if(G.fac[PLAYER].gold<d.cost||p.army.length>=8||p.rec>=p.lvl)return;
- if(d.general&&p.army.some(u=>UT[u.t].general))return;
- G.fac[PLAYER].gold-=d.cost;p.rec++;const u=mk(t);p.army.push(u);G.pick.add(u.id);
+ const p=P(G.sel),d=UT[t],cost=unitCost(PLAYER,t);
+ if(G.fac[PLAYER].gold<cost||p.army.length>=MAX_ARMY||p.rec>=p.lvl||!unitAvailable(p,t)&&!d.general&&t!=='mil')return;
+ if(d.general&&(p.army.some(u=>UT[u.t].general)||generals(PLAYER)>=maxGenerals(PLAYER)))return;
+ G.fac[PLAYER].gold-=cost;p.rec++;const u=mk(t);p.army.push(u);G.pick.add(u.id);
  closeModal();addLog(`Нанят отряд: ${uname(t,PLAYER)} (${p.n}).`);render();
- if(p.army.length<8&&p.rec<p.lvl)openRecruit();
+ if(p.army.length<MAX_ARMY&&p.rec<p.lvl)openRecruit();
 }
-export function upgrade(){const p=P(G.sel),c=400*p.lvl;if(G.fac[PLAYER].gold<c||p.lvl>=3)return;G.fac[PLAYER].gold-=c;p.lvl++;addLog(`${p.n} отстраивается (ур. ${p.lvl}).`);render()}
+export function upgrade(){const p=P(G.sel),c=SETTLE_COST*p.lvl;if(G.fac[PLAYER].gold<c||p.lvl>=3)return;G.fac[PLAYER].gold-=c;p.lvl++;addLog(`${p.n} отстраивается (ур. ${p.lvl}).`);render()}

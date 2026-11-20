@@ -6,6 +6,7 @@ import { initScene, cleanupScene, onResize, fx3d, loop } from './battle-3d.js';
 import { buildCards, updateHud } from './battle-hud.js';
 import { modal, closeModal, ask } from './ui.js';
 import { rand, seed, getState, setState } from './rng.js';
+import { hasTech } from './rules.js';
 
 // ===================== TACTICAL BATTLE (simulation, no graphics) =====================
 export let B=null;
@@ -29,7 +30,7 @@ export function Hgt(x,z){
 
 export function makeReg(o,side,x,z,fac){
  const d=UT[o.t];const body=bodyOf(o.t);
- const r={id:nextId(),o,t:o.t,side,fac,men:o.hp,start:Math.max(o.hp,1),morale:100,stam:100,x,z,face:side==='p'?Math.PI:0,
+ const r={id:nextId(),o,t:o.t,side,fac,defB:hasTech(fac,'mil1')?1:0,chT:hasTech(fac,'mil2')?1.2:1,men:o.hp,start:Math.max(o.hp,1),morale:100,stam:100,x,z,face:side==='p'?Math.PI:0,
   order:null,state:'idle',chargeT:0,idleT:5,braceT:0,cool:rand()*2,fled:false,dead:false,routing:false,inForest:false,
   spd:SPD[d.mov]||5,ranged:!!d.range,range:d.range||0,ammo:d.ammo||0,cav:d.mov>2,gen:!!d.general,skirmish:!!d.skirmish,
   form:d.charge&&d.forms&&d.forms.includes('wedge')?'wedge':'line',body,figs:[],bannerKey:''};
@@ -102,7 +103,7 @@ export function meleeHit(a,b,dt,burst){
  if(b.routing)mult*=2;
  const dot=frontal(b,a);
  let fl=1;if(!b.routing){if(dot<-0.35)fl=1.8;else if(dot<0.35)fl=1.35}
- let def=db.def*fatigue(b)*(b.inForest?1.25:1);
+ let def=(db.def+b.defB)*fatigue(b)*(b.inForest?1.25:1);
  if(b.form==='wall'&&dot>0.35)def*=1.5;
  if(b.form==='wedge')def*=0.85;
  if(b.form==='loose')def*=0.8;
@@ -110,7 +111,7 @@ export function meleeHit(a,b,dt,burst){
  const eff=atk*mult*fl*heightMult(a,b)/def*(0.35+0.65*a.men/a.start);
  let dmg;
  if(burst){
-  const chargeM=(da.charge||(a.cav?1:0.45))*(a.form==='wedge'?1.4:1);
+  const chargeM=(da.charge||(a.cav?1:0.45))*(a.form==='wedge'?1.4:1)*(a.cav?a.chT:1);
   dmg=9*eff*chargeM;
   const braced=dot>0.35&&(b.form==='wall'||db.antiCav);
   if(braced&&a.cav){dmg*=0.3;a.men-=6;moraleHit(a,10)}
@@ -124,7 +125,7 @@ export function fire(a,b){
  const da=UT[a.t],db=UT[b.t];
  a.cool=(da.reload||3.2)*(0.9+rand()*0.2);
  a.ammo--;if(a.ammo<=0){a.ranged=false;a.skirmish=false;if(a.side==='p')msg('Кончились стрелы: '+uname(a.t,a.fac).toLowerCase())}
- let def=db.def*(1-(da.ap||0));
+ let def=(db.def+b.defB)*(1-(da.ap||0));
  let dmg=6.5*da.atk*fatigue(a)*heightMult(a,b)/Math.max(1,def)*(0.35+0.65*a.men/a.start);
  if(b.inForest)dmg*=0.5;
  const dot=frontal(b,a);
