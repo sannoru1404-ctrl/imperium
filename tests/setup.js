@@ -2,7 +2,7 @@
 const ctx2d = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => ((t[k] = v), true) });
 const el = () => ({
   style: {}, innerHTML: '', textContent: '', clientWidth: 400, clientHeight: 700, disabled: false,
-  appendChild() {}, remove() {}, addEventListener() {}, setPointerCapture() {},
+  appendChild() {}, remove() {}, addEventListener() {}, setPointerCapture() {}, setAttribute() {},
   classList: { toggle() {}, add() {}, remove() {} },
   querySelector: () => el(), getContext: () => ctx2d,
   getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 700 }),

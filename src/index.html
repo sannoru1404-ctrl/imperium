@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Imperium: Русь 1100</title>
+<title>Imperium: Европа 1100</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Ruslan+Display&family=PT+Serif:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -20,7 +20,12 @@ button:disabled{opacity:.4}
 #top .stat{font-size:13px;white-space:nowrap}
 #top{gap:6px!important}
 #top .grow{flex:1}
-#mapWrap{flex:1;min-height:0;position:relative;background:#17120e}
+#mapWrap{flex:1;min-height:0;position:relative;background:#244a63;overflow:hidden}
+#mapBtns{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+#mapBtns button{width:38px;height:38px;padding:0;font-size:18px;background:#241b14dd}
+#map.far .reg:not(.big) .lbl{display:none}
+#map.far .reg .lbl{font-size:24px;stroke-width:4px}
+#map.mid .reg:not(.big) .lbl{display:none}
 #map{width:100%;height:100%;display:block}
 #panel{max-height:46%;overflow-y:auto;background:var(--panel);border-top:2px solid var(--line);padding:10px 12px 14px}
 #log{font-size:13px;color:var(--muted);min-height:18px;margin-bottom:6px}
@@ -29,7 +34,7 @@ button:disabled{opacity:.4}
 .chip.sel{border-color:var(--gold);background:#4d3b22;box-shadow:0 0 0 1px var(--gold) inset}
 .hpb{display:inline-block;width:28px;height:5px;background:#000;border-radius:3px;overflow:hidden;vertical-align:middle}
 .hpb i{display:block;height:100%;background:#7bc96f}
-.overlay{position:fixed;inset:0;background:rgba(10,7,5,.82);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.overlay{position:fixed;inset:0;background:rgba(10,7,5,.82);display:flex;align-items:center;justify-content:center;z-index:70;padding:16px}
 .modal{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:90%;overflow-y:auto;box-shadow:0 10px 40px #000}
 .modal h2{margin:0 0 10px;font-family:'Ruslan Display',serif;color:var(--gold);font-size:20px}
 .modal p{margin:6px 0;line-height:1.4}
@@ -67,8 +72,8 @@ button:disabled{opacity:.4}
 <div id="title">
   <div style="font-size:54px;filter:drop-shadow(0 4px 8px #000)">🛡️</div>
   <h1>IMPERIUM</h1>
-  <div class="sub">Лето 1100-е. Русь раздроблена, с запада давят Польша и Венгрия, с юга — степь. Собери земли под рукой Киева: возьми 15 земель из 23 или Краков и Эстергом — и не отдай Киев.</div>
-  <button class="pri" onclick="newGame()">Новая игра</button>
+  <div class="sub">Европа, 1100 год. Шесть великих держав и десятки княжеств, королевств и эмиратов. Выбери свою — и построй империю.</div>
+  <button class="pri" onclick="showNewGame()">Новая игра</button>
   <button id="contBtn" onclick="loadGame()" style="display:none">Продолжить</button>
   <button onclick="showSaves()">Загрузить</button>
   <button onclick="showHelp()">Как играть</button>
@@ -76,7 +81,7 @@ button:disabled{opacity:.4}
 
 <div id="app">
   <div id="top">
-    <span class="h" style="color:var(--gold);font-size:18px">☦</span>
+    <span class="h" id="sFac" style="color:var(--gold);font-size:18px">⚑</span>
     <span class="stat" id="sGold"></span>
     <span class="stat" id="sTurn"></span>
     <span class="grow"></span>
@@ -84,7 +89,8 @@ button:disabled{opacity:.4}
     <button onclick="showHelp()" style="padding:7px 10px">?</button>
     <button class="pri" id="endBtn" onclick="endTurn()">Ход ▶</button>
   </div>
-  <div id="mapWrap"><svg id="map" viewBox="0 0 400 440" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <div id="mapWrap"><svg id="map" viewBox="0 0 640 800"></svg>
+    <div id="mapBtns"><button onclick="mapZoom(0.75)">＋</button><button onclick="mapZoom(1.33)">−</button><button onclick="mapHome()">◎</button></div></div>
   <div id="panel"><div id="log"></div><div id="pInfo"></div></div>
 </div>
 

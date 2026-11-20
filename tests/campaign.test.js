@@ -23,7 +23,7 @@ async function playerBot() {
   }
   // attack when clearly stronger, never leave Rome empty early
   for (const p of G.prov.filter(p => p.owner === PLAYER && p.army.length && !p.moved)) {
-    if (p.id === FACT[PLAYER].cap && p.army.length < 6) continue;
+    if (p.id === st.capOf(PLAYER) && p.army.length < 6) continue;
     const t = adj(p.id).map(P).filter(x => x.owner !== PLAYER)
       .sort((a, b) => (str(a.army) + str(garUnits(a), 1.2)) - (str(b.army) + str(garUnits(b), 1.2)))[0];
     if (!t || str(p.army) < 1.3 * (str(t.army) + str(garUnits(t), 1.2))) continue;
@@ -42,7 +42,7 @@ async function runCampaign(seed) {
   }
   const owners = {};
   st.G.prov.forEach(p => (owners[p.owner] = (owners[p.owner] || 0) + 1));
-  const result = P(FACT[PLAYER].cap).owner !== PLAYER ? 'loss' : st.G.over ? 'win' : 'timeout';
+  const result = !st.G.prov.some(p => p.owner === PLAYER) ? 'loss' : st.G.over ? 'win' : 'timeout';
   return { result, turn: st.G.turn, owners, hash: JSON.stringify(st.G.prov.map(p => [p.owner, p.army.length, p.gar])) };
 }
 

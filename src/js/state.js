@@ -1,5 +1,5 @@
 import { seed, getState, setState } from './rng.js';
-import { FACT, UT, PROV_DEF, ADJ, START_ARMY, START_GOLD, PLAYER, isRanged } from './data.js';
+import { FACT, UT, PROV_DEF, ADJ, START_ARMY, START_ARMY_CULT, START_GOLD, PLAYER, setPlayer, START_YEAR } from './data.js';
 import { $ } from './util.js';
 import { render } from './map.js';
 
@@ -10,19 +10,33 @@ export function P(id){return G.prov.find(p=>p.id===id)}
 export function adj(id){return ADJ.filter(a=>a[0]===id||a[1]===id).map(a=>a[0]===id?a[1]:a[0])}
 export function isSea(a,b){return ADJ.some(x=>((x[0]===a&&x[1]===b)||(x[0]===b&&x[1]===a))&&x[2])}
 
-export function newGame(gameSeed){
+export function capOf(f){return G.fac[f]&&G.fac[f].cap}
+export function newGame(gameSeed,faction){
  uid=1;
+ if(faction)setPlayer(faction);
  const sd=(gameSeed??(Date.now()^Math.floor(Math.random()*1e9)))>>>0; seed(sd);
- G={seed:sd,turn:1,sel:null,pick:new Set(),log:[],
-  fac:Object.fromEntries(Object.entries(START_GOLD).map(([f,g])=>[f,{gold:g}])),
-  prov:PROV_DEF.map(d=>({id:d[0],n:d[1],x:d[2],y:d[3],owner:d[4],base:d[5],lvl:d[0]===FACT[d[4]]?.cap?2:1,gar:2,army:[],moved:false,rec:0}))};
- G.prov.forEach(p=>{if(FACT[p.owner].cap===p.id)p.lvl=2;p.gar=p.owner==='rebel'?4:FACT[p.owner].cap===p.id?4:2;(START_ARMY[p.id]||[]).forEach(t=>p.army.push(mk(t)))});
+ G={seed:sd,player:PLAYER,turn:1,sel:null,pick:new Set(),log:[],fac:{},
+  prov:PROV_DEF.map(d=>({id:d[0],n:d[1],x:d[2],y:d[3],owner:d[4],base:d[5],tier:d[6],lvl:d[6]>=3?2:1,gar:2,army:[],moved:false,rec:0}))};
+ for(const f in FACT)G.fac[f]={gold:f==='rebel'?0:FACT[f].major?START_GOLD.major:START_GOLD.minor,cap:FACT[f].cap};
+ const conv=f=>{const c=START_ARMY_CULT[FACT[f].cult];return t=>c?c(t):t};
+ for(const f in FACT){
+  if(f==='rebel')continue;
+  const own=G.prov.filter(p=>p.owner===f);if(!own.length)continue;
+  const cap=G.prov.find(p=>p.id===FACT[f].cap)||own[0];
+  (FACT[f].major?START_ARMY.major:START_ARMY.minor).map(conv(f)).forEach(t=>cap.army.push(mk(t)));
+  if(FACT[f].major){const second=own.filter(p=>p!==cap).sort((a,b)=>b.tier-a.tier)[0];if(second)START_ARMY.major2.map(conv(f)).forEach(t=>second.army.push(mk(t)))}
+ }
+ G.prov.forEach(p=>{
+  const cap=capOf(p.owner)===p.id;
+  p.gar=p.owner==='rebel'?3+p.tier:cap?4:2;
+  if(p.owner==='rebel'&&p.tier>=2)START_ARMY.rebelBig.forEach(t=>p.army.push(mk(t)));
+ });
  $('title').style.display='none';
- addLog('Лето 1100-е. Князь, собирай русские земли — враги у порога.');
- render();
+ addLog(`Лето ${START_YEAR}-е. ${FACT[PLAYER].n}: ${FACT[PLAYER].d||'собирай земли'}`);
+ render(true);
 }
 // ---------- saves: 3 manual slots + autosave, versioned ----------
-export const SAVE_VER=2; // v2: medieval prologue (older Roman saves are not compatible)
+export const SAVE_VER=3; // v3: grand campaign map of Europe (older saves are not compatible)
 export const SLOTS=['auto','1','2','3'];
 const key=slot=>'imperium_v'+SAVE_VER+'_'+slot;
 export function saveSlot(slot='auto'){
@@ -41,8 +55,8 @@ export function readSlot(slot){
 }
 export function loadSlot(slot){
  const d=readSlot(slot);if(!d)return false;
- G=d.G;G.pick=new Set();G.busy=false;G.sel=null;uid=d.uid;setState(d.rng||1);
- $('title').style.display='none';render();return true;
+ G=d.G;G.pick=new Set();G.busy=false;G.sel=null;uid=d.uid;setState(d.rng||1);setPlayer(G.player);
+ $('title').style.display='none';render(true);return true;
 }
 export function loadGame(){if(!loadSlot('auto'))newGame()}
 

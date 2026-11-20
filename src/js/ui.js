@@ -1,6 +1,7 @@
-import { WIN_N } from './data.js';
+import { WIN_N, MAJORS, FACT } from './data.js';
+import { PROV_DEF } from './data.js';
 import { $ } from './util.js';
-import { G, addLog, SLOTS, readSlot, saveSlot, loadSlot } from './state.js';
+import { G, addLog, SLOTS, readSlot, saveSlot, loadSlot, newGame } from './state.js';
 import { render } from './map.js';
 
 // ===================== UI HELPERS =====================
@@ -18,8 +19,8 @@ export function ask(title,body,btns){
 }
 export function toast(t){addLog(t);render()}
 export function showHelp(){modal(`<h2>Как играть</h2>
-<p><b>Цель:</b> собери ${WIN_N} земель из 23 или возьми Краков и Эстергом. Если падёт Киев — конец.</p>
-<p><b>Карта:</b> нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
+<p><b>Цель:</b> собери ${WIN_N} земель или сокруши все остальные великие державы. Потеряешь все земли — конец.</p>
+<p><b>Карта:</b> двигай пальцем, двумя пальцами — масштаб (или кнопки ＋ ／ − ／ ◎). Нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
 <p><b>Казна:</b> земли приносят золото, каждый отряд стоит 20 в год. Отстраивай города: больше дохода, найма и ополчения.</p>
 <p><b>Воевода:</b> один на войско. Рядом с ним полки стойче и быстрее приходят в себя. Если он погибнет или побежит — всё войско дрогнет.</p>
 <p><b>Битва:</b> идёт в реальном времени. Тапни полк (или карточку внизу), затем врага — атака, или землю — марш. Палец двигает камеру, двумя пальцами — масштаб и поворот. ⏸ — пауза, приказы можно отдавать на паузе.</p>
@@ -50,3 +51,14 @@ export function saveTo(s){
  render();showSaves();
 }
 export function loadFrom(s){closeModal();if(!loadSlot(s))modal('<h2>Ошибка</h2><p>Сохранение повреждено.</p><button onclick="closeModal()">Закрыть</button>')}
+
+// ---------- new game: choose a great power ----------
+const DIFF={rus:'средне',pol:'средне',hre:'легко',hun:'средне',byz:'легко',fra:'сложно'};
+export function showNewGame(){
+ const rows=MAJORS.map(f=>{const F=FACT[f];const n=PROV_DEF.filter(d=>d[4]===f).length;
+  return `<div class="rec" style="align-items:flex-start;gap:10px"><div style="flex:1"><div><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${F.c};margin-right:6px;vertical-align:-1px"></span><b>${F.emblem} ${F.n}</b></div>
+   <div class="small" style="margin:3px 0">${F.d}</div><div class="small">Земель: ${n} · сложность: ${DIFF[f]}</div></div>
+   <button class="pri" onclick="startGame('${f}')">Играть</button></div>`}).join('');
+ modal(`<h2>Выбери державу</h2><p class="small">Европа, ${1100} год. Цель — ${WIN_N} земель или гибель всех остальных великих держав.</p>${rows}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Назад</button></div>`);
+}
+export function startGame(f){closeModal();newGame(undefined,f)}

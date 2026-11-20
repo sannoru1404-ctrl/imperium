@@ -1,6 +1,6 @@
-import { FACT, UT, RECRUIT, WIN_N, PLAYER, AI_FACTIONS, AI, START_YEAR, REBELS } from './data.js';
+import { FACT, UT, RECRUIT, WIN_N, PLAYER, aiFactions, AI, START_YEAR, REBELS, MAJORS } from './data.js';
 import { $, rnd, sleep } from './util.js';
-import { G, mk, P, adj, newGame, save, addLog, income, str, garUnits } from './state.js';
+import { G, mk, P, adj, newGame, save, addLog, income, str, garUnits, capOf } from './state.js';
 import { render, capture, applyBattle, recruit, upgrade } from './map.js';
 import { alive, tactical } from './battle-sim.js';
 import { modal, closeModal, ask } from './ui.js';
@@ -10,7 +10,7 @@ import { rand } from './rng.js';
 export async function endTurn(){
  if(G.busy)return;G.busy=true;$('endBtn').disabled=true;
  G.sel=null;G.pick=new Set();
- for(const f of AI_FACTIONS){
+ for(const f of aiFactions()){
   if(!G.prov.some(p=>p.owner===f))continue;
   await aiTurn(f);
   if(G.over)return;
@@ -20,7 +20,7 @@ export async function endTurn(){
  for(const f in G.fac){if(f==='rebel')continue;G.fac[f].gold=Math.max(0,G.fac[f].gold+income(f).net)}
  G.prov.forEach(p=>{
   p.moved=false;p.rec=0;
-  const gmax=p.lvl+1+(p.owner==='rebel'?REBELS.garBonus:0)+(FACT[p.owner].cap===p.id?2:0);
+  const gmax=p.lvl+1+(p.owner==='rebel'?REBELS.garBonus:0)+(capOf(p.owner)===p.id?2:0);
   if(p.gar<gmax&&G.turn%2===0)p.gar++;
   if(p.occ>0)p.occ--;
   // independent lands slowly raise their own warband
@@ -34,9 +34,11 @@ export async function endTurn(){
 export function checkEnd(){
  if(G.over)return;
  const n=G.prov.filter(p=>p.owner===PLAYER).length;
- if(P(FACT[PLAYER].cap).owner!==PLAYER){G.over=true;save();modal(`<h2>Киев пал</h2><p>Враг в стольном граде, дружина рассеяна. Твоё княжение окончилось в ${START_YEAR-1+G.turn} году.</p><button class="pri" onclick="closeModal();newGame()">Новая игра</button>`);return}
- const capsTaken=AI_FACTIONS.every(f=>P(FACT[f].cap).owner===PLAYER);
- if(n>=WIN_N||capsTaken||!G.prov.some(p=>AI_FACTIONS.includes(p.owner))){G.over=true;save();modal(`<h2>☦ Слава!</h2><p>${capsTaken?'Краков и Эстергом склонились перед тобой.':'Земли от Варяжского моря до Карпат под твоей рукой.'} Ты собрал державу за ${G.turn} лет. Слава князю!</p><button class="pri" onclick="closeModal();newGame()">Новая игра</button>`)}
+ const ruler={rus:'князя',pol:'короля',hre:'императора',hun:'короля',byz:'базилевса',fra:'короля'}[PLAYER]||'государя';
+ if(n===0){G.over=true;save();modal(`<h2>Держава пала</h2><p>У тебя не осталось ни одной земли. Твоё правление окончилось в ${START_YEAR-1+G.turn} году.</p><button class="pri" onclick="closeModal();showNewGame()">Новая игра</button>`);return}
+ const rivals=MAJORS.filter(f=>f!==PLAYER);
+ const rivalsGone=rivals.every(f=>!G.prov.some(p=>p.owner===f));
+ if(n>=WIN_N||rivalsGone){G.over=true;save();modal(`<h2>${FACT[PLAYER].emblem} Слава!</h2><p>${rivalsGone?'Все великие державы пали перед тобой.':`Под твоей рукой ${n} земель.`} Ты создал великую державу за ${G.turn} лет. Слава ${ruler}!</p><button class="pri" onclick="closeModal();showNewGame()">Новая игра</button>`)}
 }
 
 export async function aiTurn(f){
@@ -73,7 +75,7 @@ export async function aiTurn(f){
   if(best&&bs>aggr&&attacks<AI.maxAttacksPerTurn){
    // keep enough at home to face the strongest neighbouring army (anyone's, not only the player's)
    const threat=Math.max(0,...adj(p.id).map(P).filter(t=>t.owner!==f&&t!==best).map(t=>str(t.army)));
-   const need=threat*(FACT[f].cap===p.id?1.0:0.7)-str(garUnits(p),1.2);
+   const need=threat*(capOf(f)===p.id?1.0:0.7)-str(garUnits(p),1.2);
    const sorted=[...p.army].sort((x,y)=>str([x])-str([y]));
    const stay=[];while(need>0&&str(stay)<need&&sorted.length)stay.push(sorted.shift());
    const units=sorted;
