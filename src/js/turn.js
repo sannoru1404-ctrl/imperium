@@ -174,8 +174,8 @@ export function sieges(){
   const ok=from.owner===S.f&&from.army.some(u=>UT[u.t].general)&&p.owner!==S.f&&(p.owner==='rebel'||atWar(S.f,p.owner));
   if(!ok){if(p.owner===PLAYER||S.f===PLAYER)addLog(`Осада ${p.n} снята.`);p.siege=null;from.besiege=null;continue}
   S.turns++;from.moved=true;
-  // hunger in the town
-  p.gar=Math.max(0,p.gar-1);
+  // hunger in the town; a trebuchet adds its stones
+  p.gar=Math.max(0,p.gar-1-(engines(p,S.f).treb?1:0));
   p.army.forEach(u=>u.hp=Math.round(u.hp*0.85));p.army=p.army.filter(u=>u.hp>=15);
   if(S.turns>=2+wallLevel(p)||(!p.gar&&!p.army.length)){
    const units=from.army;from.army=[];from.besiege=null;p.siege=null;
@@ -184,11 +184,18 @@ export function sieges(){
   }
  }
 }
-export function hasRam(to,f){return !!(to.siege&&to.siege.f===f&&to.siege.turns>=1)}
-export function siegeOpts(to,f){const w=wallLevel(to);return w?{wall:w,ram:hasRam(to,f)}:null}
+// siege engines built by the besiegers: a ram after a year, a siege tower after two,
+// a trebuchet after two with «Осадное дело» (otherwise after three)
+export function engines(to,f){
+ const t=to.siege&&to.siege.f===f?to.siege.turns:0;
+ return {ram:t>=1,tower:t>=2,treb:t>=(hasTech(f,'mil3')?2:3)};
+}
+export function hasRam(to,f){return engines(to,f).ram}
+export function siegeOpts(to,f){const w=wallLevel(to);return w?{wall:w,...engines(to,f)}:null}
+export function effWall(w,e){return Math.max(0,w-(e.ram?0.6:0)-(e.tower?0.4:0)-(e.treb?0.4:0))}
 export function siegeMods(to,attacker){
  const k=hasTech(attacker,'mil3')?0.75:1;
- const w=Math.max(0,wallLevel(to)-(hasRam(to,attacker)?0.6:0));
+ const w=effWall(wallLevel(to),engines(to,attacker));
  return [1+(0.2+0.3*w)*k,1+0.15*w*k];
 }
 export function autoResolve(att,def,garBonus,defMult=1,attMult=1){

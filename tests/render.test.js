@@ -30,13 +30,14 @@ if (!(r3.S3 === null && sim.B === null)) process.exit(1);
 // a siege battle: walls, towers, gate, town and ladders on the mock renderer
 const att2 = ['gen', 'druzh', 'druzh', 'spear', 'spear', 'arch', 'knight'].map(t => mk(t));
 const def2 = ['gen', 'spear', 'druzh', 'arch', 'xbow'].map(t => mk(t));
-const pr2 = sim.tactical(att2, def2, 'rus', 'pol', 'att', 'Осада', { wall: 2, ram: true });
-if (!r3.S3 || !r3.S3.gate || !r3.S3.ladders) { console.error('siege scenery missing'); process.exit(1); }
+const pr2 = sim.tactical(att2, def2, 'rus', 'pol', 'att', 'Осада', { wall: 2, ram: true, tower: true, treb: true });
+if (!r3.S3 || !r3.S3.gate || !r3.S3.ladders || !r3.S3.tw || !r3.S3.tb) { console.error('siege scenery missing'); process.exit(1); }
 const C2 = globalThis.CANVAS.L;
 hud.bSelAll(); C2.pointerdown({ pointerId: 1, clientX: 220, clientY: 315, button: 0 }); C2.pointerup({ pointerId: 1, clientX: 220, clientY: 315, button: 0 });
 hud.bPause(); hud.bSpeed(); hud.bSpeed(); hud.bCharge();
-let f2 = 0, ladders = 0; while (sim.B && !sim.B.over && f2 < 40000) { now += 33; globalThis.__raf(now); f2++; ladders = Math.max(ladders, r3.S3 ? r3.S3.ladders.count : 0); }
+let f2 = 0, ladders = 0, docked = false, stones = 0; while (sim.B && !sim.B.over && f2 < 40000) { now += 33; globalThis.__raf(now); f2++; ladders = Math.max(ladders, r3.S3 ? r3.S3.ladders.count : 0); if (sim.B && sim.B.siege.tw.docked) docked = true; if (r3.S3 && r3.S3.stoneFly) stones++; }
 const gateOpen = sim.B && sim.B.siege.open;
 await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
 sim.endBattle(); const res2 = await pr2;
-console.log(`siege render: frames ${f2}, max ladders ${ladders}, gate broken ${gateOpen}, result ${res2.win}`);
+console.log(`siege render: frames ${f2}, max ladders ${ladders}, gate broken ${gateOpen}, tower docked ${docked}, stone frames ${stones}, result ${res2.win}`);
+if (!stones) { console.error('trebuchet does not throw'); process.exit(1); }

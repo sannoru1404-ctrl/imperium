@@ -1,7 +1,7 @@
 import { UT, uname, FORMS, ABIL } from './data.js';
 import { $, rnd } from './util.js';
 import { nextId } from './state.js';
-import { autoResolve } from './turn.js';
+import { autoResolve, effWall } from './turn.js';
 import { initScene, cleanupScene, onResize, fx3d, loop } from './battle-3d.js';
 import { buildCards, updateHud } from './battle-hud.js';
 import { modal, closeModal, ask } from './ui.js';
@@ -59,7 +59,11 @@ export function setupBattle(att,def,af,df,playerSide,place,battleSeed,siege,mods
   // a walled town: the wall runs across the whole field in front of the defenders
   const defSide=playerSide==='def'?'p':'e', defSign=defSide==='p'?1:-1;
   B.siege={wall:siege.wall,ram:!!siege.ram,defSide,defSign,W:defSign*14,gateMax:siege.wall>1?100:60,gateHp:siege.wall>1?100:60,open:false,
-   towers:(siege.wall>1?[-45,-10,10,45]:[-10,10]).map(x=>({x,cool:rand()*3})),climbT:siege.wall>1?8:6};
+   towers:(siege.wall>1?[-45,-10,10,45]:[-10,10]).map(x=>({x,cool:rand()*3,hp:2})),climbT:siege.wall>1?8:6};
+  const S=B.siege,side=rand()<0.5?-1:1;
+  // a siege tower rolls towards the wall; a trebuchet throws stones from afar
+  if(siege.tower)S.tw={x:side*38,z:S.W-defSign*42,hp:100,docked:false,dead:false};
+  if(siege.treb)S.tb={x:-side*55,z:S.W-defSign*75,cool:4,throwT:0};
  } else {
   for(let i=0;i<3;i++)B.forests.push({x:(rand()-.5)*130,z:(rand()-.5)*40,r:9+rand()*7});
   // one or two real hills: holding the high ground matters
@@ -163,6 +167,13 @@ function wallMove(r,tx,tz,dt,mult){
  }
  const gd=Math.hypot(r.x,r.z-(W+s0*4));
  if(isAttacker(r)&&!r.routing){
+  const tw=S.tw&&S.tw.docked&&!S.tw.dead&&Math.abs(r.x-S.tw.x)<32?S.tw:null;
+  if(tw&&r.body==='inf'&&!r.ranged&&!(r.order&&r.order.type==='gate')){   // across the siege tower's bridge
+   if(Math.abs(r.z-(W+s0*3))>0.6||Math.abs(r.x-tw.x)>2.5){basicMove(r,tw.x,W+s0*3,dt,mult);r.climb=0;return false}
+   r.climb=(r.climb||0)+dt;r.wst='tower';turnTo(r,r.x,W-s0*5,dt,6);
+   if(r.climb>=S.climbT*0.3){r.z=W-s0*4;r.climb=0;r.passed=true;if(r.side==='p')msg('🗼 По мосту башни: '+uname(r.t,r.fac)+' на стене')}
+   return false;
+  }
   if(r.body==='inf'&&gd>10&&!r.ranged&&!(r.order&&r.order.type==='gate')){   // ladders
    const cx=clamp(r.x+(tx-r.x)*0.3,-95,95);
    if(Math.abs(r.z-(W+s0*2.5))>0.6||Math.abs(r.x-cx)>3){basicMove(r,cx,W+s0*2.5,dt,mult);r.climb=0;return false}
@@ -367,8 +378,29 @@ function generalLost(g,killed){
 // towers on the wall shoot at attackers in reach
 function siegeStep(dt){
  const S=B.siege;
+ if(S.tw&&!S.tw.dead&&!S.tw.docked){
+  const goal=S.W-S.defSign*3.5,d=goal-S.tw.z;
+  S.tw.z+=Math.sign(d)*Math.min(Math.abs(d),1.6*dt);
+  if(Math.abs(goal-S.tw.z)<0.1){S.tw.docked=true;msg('🗼 Осадная башня у стены — мост опущен!')}
+ }
+ if(S.tb){
+  S.tb.cool-=dt;S.tb.throwT=Math.max(0,S.tb.throwT-dt);
+  if(S.tb.cool<=0){S.tb.cool=8+rand()*2;S.tb.throwT=1;
+   const live=S.towers.filter(t=>!t.dead);
+   const onWall=B.regs.filter(r=>alive(r)&&!isAttacker(r)&&wallSide(r.z)===S.defSign&&Math.abs(r.z-S.W)<14);
+   const roll=rand();let tgt=null;
+   if(!S.open&&roll<0.4){S.gateHp=Math.max(0,S.gateHp-S.gateMax*0.12);tgt={x:0,z:S.W};if(S.gateHp<=0){S.open=true;msg('🚪 Требушет разбил ворота!')}}
+   else if(live.length&&roll<0.7){const t=live[Math.floor(rand()*live.length)];t.hp--;tgt={x:t.x,z:S.W};if(t.hp<=0){t.dead=true;msg('🪨 Башня стены рухнула!')}}
+   else if(onWall.length){const r=onWall[Math.floor(rand()*onWall.length)];r.men-=5;moraleHit(r,10);tgt=r}
+   if(tgt)fx3d('stone',S.tb,tgt,2.2);
+  }
+ }
  for(const t of S.towers){
+  if(t.dead)continue;
   t.cool-=dt;if(t.cool>0)continue;
+  // the wall towers also shoot fire arrows at a siege tower coming close
+  if(S.tw&&!S.tw.dead&&!S.tw.docked&&Math.hypot(S.tw.x-t.x,S.tw.z-S.W)<45&&rand()<0.35){
+   t.cool=3.5+rand();S.tw.hp-=9;if(S.tw.hp<=0){S.tw.dead=true;msg('🔥 Осадная башня сгорела!')}continue}
   let best=null,bd=48;
   for(const r of B.regs)if(alive(r)&&!r.routing&&isAttacker(r)){const d=Math.hypot(r.x-t.x,r.z-S.W);if(d<bd){bd=d;best=r}}
   if(!best){t.cool=1;continue}
@@ -395,9 +427,10 @@ function siegeAI(mine,foes){
   // storming the town: a third of the foot batters the gate, the rest climb; horsemen wait for the gate
   let i=0;
   for(const r of mine){
-   if(r.state==='fight'||r.state==='climb'||r.state==='bash')continue;
+   if(r.state==='fight'||r.state==='climb'||r.state==='bash'||r.state==='tower')continue;
    if(r.ranged){let n=null,nd=1e9;for(const f of foes){const d=rdist(r,f);if(d<nd){nd=d;n=f}}r.order=n?{type:'attack',tg:n}:null;continue}
    if(!S.open&&(r.cav||r.gen)){r.order={type:'move',x:r.x,z:S.W-S.defSign*30};continue}
+   if(S.tw&&!S.tw.dead&&!S.tw.docked&&r.body==='inf'&&i%3!==0){r.order={type:'move',x:S.tw.x+((i%4)-1.5)*7,z:S.tw.z-S.defSign*8};i++;continue}  // wait behind the tower
    if(!S.open&&r.body==='inf'&&(i++%3===0||S.ram&&i%2===0)){r.order={type:'gate'};continue}
    let n=null,nd=1e9;for(const f of foes){const d=rdist(r,f);if(d<nd){nd=d;n=f}}
    if(n)r.order={type:'attack',tg:n};
@@ -511,7 +544,7 @@ export function tactical(att,def,af,df,playerSide,place,siege,mods){
   if(!ok){
    cleanupScene();
    const am=mods&&mods.ambush?0.8:mods&&mods.tired?0.9:1, dm=mods&&mods.camp?1.25:1;
-   setState(B.campRng);const res=siege&&siege.wall?autoResolve(att,def,1+0.5*siege.wall,(1+0.15*siege.wall)*dm,am):autoResolve(att,def,1.2,dm,am);B=null;
+   setState(B.campRng);const ew=siege&&siege.wall?effWall(siege.wall,siege):0;const res=siege&&siege.wall?autoResolve(att,def,1+0.5*ew,(1+0.15*ew)*dm,am):autoResolve(att,def,1.2,dm,am);B=null;
    ask('3D недоступно','<p>Не удалось запустить 3D на этом устройстве — битва рассчитана автоматически.</p>',[['ok','Далее',1]]).then(()=>resolve(res));
    return;
   }

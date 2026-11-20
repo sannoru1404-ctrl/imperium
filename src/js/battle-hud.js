@@ -16,7 +16,7 @@ export function updateHud(){
  if(!B)return;
  const sh=sd=>B.regs.filter(r=>r.side===sd&&alive(r)&&!r.routing).reduce((a,r)=>a+Math.max(0,r.men),0)/Math.max(1,B.init[sd])*100;
  $('barP').style.width=sh('p')+'%';$('barE').style.width=sh('e')+'%';
- const s=Math.floor(B.time);$('bTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+(B.siege?(B.siege.open?' · 🚪 выбиты':` · 🚪 ${Math.round(100*B.siege.gateHp/B.siege.gateMax)}%`):'');
+ const s=Math.floor(B.time);$('bTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+(B.siege?(B.siege.open?' · 🚪 выбиты':` · 🚪 ${Math.round(100*B.siege.gateHp/B.siege.gateMax)}%`)+(B.siege.tw?(B.siege.tw.dead?' · 🗼 сгорела':B.siege.tw.docked?' · 🗼 у стены':` · 🗼 ${Math.round(B.siege.tw.hp)}%`):'')+(B.siege.tb?' · 🪨':''):'');
  $('bPause').textContent=B.paused?'▶':'⏸';$('bPause').classList.toggle('pri',B.paused);
  $('bSpeed').textContent='×'+B.speed;
  $('bMsg').innerHTML=B.msgs.map(m=>`<div style="opacity:${Math.min(1,m.life)}">${m.t}</div>`).join('');

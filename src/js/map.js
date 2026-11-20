@@ -2,7 +2,7 @@ import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI, BU
 import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS, PROVINCE_BORDERS } from './mapdata.js';
 import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
-import { checkEnd, autoResolve, siegeMods, siegeOpts, startSiege, hasRam } from './turn.js';
+import { checkEnd, autoResolve, siegeMods, siegeOpts, startSiege, hasRam, engines } from './turn.js';
 import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
 import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost, provinceOf, ownsProvince, isProvCap, edictAt, foodOf, regionFood, starving, faithOrder } from './rules.js';
 import { B, tactical } from './battle-sim.js';
@@ -132,7 +132,7 @@ export function drawPanel(){
  {const pv=provinceOf(p.id),n=pv.regs.filter(id=>P(id).owner===p.owner).length,whole=ownsProvince(p.owner,pv.id),e=edictAt(p);
   h+=`<div class="small" style="margin-top:3px">🗺 <a href="#" style="color:var(--gold)" onclick="event.preventDefault();showRealm('edict')">${pv.n}</a>${isProvCap(p)?' · столица провинции':''} · ${whole?`вся (доход +${Math.round(PROVINCE_BONUS.inc*100)}%, порядок +${PROVINCE_BONUS.order})`:`${n}/${pv.regs.length}`}${e!=='none'?` · ${EDICTS[e].i} ${EDICTS[e].n}`:''}</div>`}
  if(p.rel){const fo=faithOrder(p);h+=`<div class="small">${Object.keys(p.rel).sort((a,b)=>p.rel[b]-p.rel[a]).map(x=>`${FAITHS[x].i} ${FAITHS[x].n} ${Math.round(p.rel[x]*100)}%`).join(' · ')}${fo<0?` <span style="color:#e57373">(порядок ${fo})</span>`:''}</div>`}
- if(p.siege)h+=`<div class="small" style="color:#e0b34a;margin-top:4px">⛺ Осада: ${FACT[p.siege.f].n}, ${p.siege.turns} г.${p.siege.turns>=1?' · таран готов':''} · сдастся через ${Math.max(0,2+wallLevel(p)-p.siege.turns)} г.</div>`;
+ if(p.siege)h+=`<div class="small" style="color:#e0b34a;margin-top:4px">⛺ Осада: ${FACT[p.siege.f].n}, ${p.siege.turns} г.${(()=>{const E=engines(p,p.siege.f);const e=[E.ram&&'таран',E.tower&&'башня',E.treb&&'требушет'].filter(Boolean);return e.length?' · готово: '+e.join(', '):''})()} · сдастся через ${Math.max(0,2+wallLevel(p)-p.siege.turns)} г.</div>`;
  if(own)h+=`<div class="tabs"><button class="${PANEL_TAB==='army'?'on':''}" onclick="setTab('army')">⚔ Войско</button><button class="${PANEL_TAB==='build'?'on':''}" onclick="setTab('build')">🏗 Постройки ${usedSlots(p)}/${slots(p)}</button></div>`;
  if(!own||PANEL_TAB==='army'){
   if(p.army.length){
@@ -210,10 +210,11 @@ export async function moveArmy(from,to){
  const sm=siegeMods(to,PLAYER);
  const sa=Math.round(str(att)),sd=Math.round(str(def.filter(u=>!u.gar))*sm[1]+str(garUnits(to),sm[0]));
  const tired=from.mstep>0;
- const w=wallLevel(to),ram=hasRam(to,PLAYER);
- const wallTxt=w?`<p>🧱 ${w>1?'Каменные':'Деревянные'} стены. ${ram?'Таран готов — ворота падут быстро.':to.siege&&to.siege.f===PLAYER?'Таран будет готов через год осады.':'Можно штурмовать по лестницам или осадить: через год будет таран, а через '+(2+w)+' года город сдастся от голода.'}</p>`:'';
+ const w=wallLevel(to),ram=hasRam(to,PLAYER),E=engines(to,PLAYER);
+ const eng=[E.ram&&'таран',E.tower&&'осадная башня',E.treb&&'требушет'].filter(Boolean);
+ const wallTxt=w?`<p>🧱 ${w>1?'Каменные':'Деревянные'} стены. ${eng.length?'Готово: '+eng.join(', ')+'.':''} ${to.siege&&to.siege.f===PLAYER?(!E.tower?'Через год осады будет осадная башня.':!E.treb?'Требушет — ещё через год (с «Осадным делом» быстрее).':''):'Можно штурмовать по лестницам или осадить: через год — таран, через два — осадная башня, потом требушет. Через '+(2+w)+' года город сдастся от голода.'}</p>`:'';
  const ch=await ask(`${w?'Город':'Битва за'} ${to.n}`,`<p>Твои силы: <b>${sa}</b> (${att.length} отр.)</p>${reinfText(reinf,'att')}<p>Враг (${FACT[to.owner].n}): <b>${sd}</b> (${def.length-to.gar} отр. + ${to.gar} ополч.)</p>${reinfText(reinf,'def')}${stanceOf(to)==='camp'?'<p class="small">⛺ Враг стоит лагерем: в обороне сильнее.</p>':''}${tired?'<p class="small">🏃 Войско устало после марша.</p>':''}${wallTxt}${isSea(from.id,to.id)?'<p class="small">⛵ Морской десант</p>':''}`,
-  w?[['fight',ram?'⚔ Штурм с тараном':'⚔ Штурм по лестницам',1],['auto','🎲 Авторасчёт штурма'],...(to.siege?[]:[['siege','⛺ Осадить']]),['no','Отмена']]
+  w?[['fight',E.tower?'⚔ Штурм с башней':ram?'⚔ Штурм с тараном':'⚔ Штурм по лестницам',1],['auto','🎲 Авторасчёт штурма'],...(to.siege?[]:[['siege','⛺ Осадить']]),['no','Отмена']]
    :[['fight','⚔ Командовать',1],['auto','🎲 Авторасчёт'],['no','Отмена']]);
  if(ch==='no')return;
  if(ch==='siege'){startSiege(from,to,PLAYER);G.pick=new Set();render();return}

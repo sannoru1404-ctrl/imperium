@@ -192,6 +192,7 @@ export function marker(x,z,col){
 // ---------- fx ----------
 export function fx3d(kind,a,b,dur){
  if(!S3)return;
+ if(kind==='stone'){S3.stoneFly={sx:a.x,sz:a.z,ex:b.x,ez:b.z,t:0,dur};return}
  if(kind==='volley'){
   const n=Math.min(14,4+Math.ceil(a.figs.length/2));
   for(let i=0;i<n;i++){const f=a.figs[Math.floor(Math.random()*a.figs.length)]||a;
@@ -334,6 +335,24 @@ function buildSiege(scene){
  // ladders, placed each frame where regiments climb
  S3.ladders=new THREE.InstancedMesh(mergeGeo([box(.15,7,.15,-.45,3.5,0),box(.15,7,.15,.45,3.5,0),...[1,2.2,3.4,4.6,5.8].map(y=>box(.9,.1,.1,0,y,0))]),new THREE.MeshLambertMaterial({color:0x7a5a34}),60);
  S3.ladders.count=0;S3.ladders.frustumCulled=false;scene.add(S3.ladders);
+ // siege engines
+ const wood=new THREE.MeshLambertMaterial({color:0x6e4b2a}),hide=new THREE.MeshLambertMaterial({color:0x8a6a44});
+ if(S.tw){
+  S3.tw=new THREE.Mesh(mergeGeo([box(6,13,6,0,6.5,0),box(6.6,.6,6.6,0,13.2,0),...[-2.4,2.4].map(x=>box(.8,1.2,1.2,x,.6,-2.4)),...[-2.4,2.4].map(x=>box(.8,1.2,1.2,x,.6,2.4))]),hide);
+  S3.twBridge=new THREE.Mesh(box(4,.4,5,0,0,0),wood);S3.twBridge.visible=false;
+  scene.add(S3.tw,S3.twBridge);
+ }
+ if(S.tb){
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(mergeGeo([box(5,1,7,0,.5,0),box(.8,7,.8,-1.8,4,0),box(.8,7,.8,1.8,4,0),box(4.4,.6,.6,0,7.3,0)]),wood));
+  S3.tbArm=new THREE.Group();S3.tbArm.position.set(0,7.3,0);
+  S3.tbArm.add(new THREE.Mesh(mergeGeo([box(.5,.5,12,0,0,2.5),box(1.6,1.6,1.6,0,-.8,-3.2)]),wood));
+  g.add(S3.tbArm);g.position.set(S.tb.x,Hgt(S.tb.x,S.tb.z),S.tb.z);g.rotation.y=S.defSign>0?0:Math.PI;
+  S3.tb=g;scene.add(g);
+ }
+ S3.stone=new THREE.Mesh(new THREE.SphereGeometry(0.9,8,6),new THREE.MeshLambertMaterial({color:0x777066}));S3.stone.visible=false;scene.add(S3.stone);
+ // wall towers knocked down by stones are hidden
+ S3.wallTowers=[tw,roof];
 }
 function syncSiege(){
  const S=B.siege,W=S.W,dm=S3.dm;
@@ -342,7 +361,17 @@ function syncSiege(){
   for(let i=0;i<8;i++){dm.position.set((i-4)*1.5,Hgt(0,W),W+(i%3-1)*1.5);dm.rotation.set(0,i*0.9,0);dm.updateMatrix();deb.setMatrixAt(i,dm.matrix)}
   dm.rotation.set(0,0,0);S3.scene.add(deb)}
  let n=0;
- for(const r of B.regs){if(!(r.climb>0)||!alive(r))continue;
+ if(S3.tw){const t=S.tw;S3.tw.visible=!t.dead;S3.tw.position.set(t.x,Hgt(t.x,t.z)-0.3,t.z);
+  S3.twBridge.visible=t.docked&&!t.dead;S3.twBridge.position.set(t.x,Hgt(t.x,W)+6.3,W-S.defSign*0.5)}
+ if(S3.tb)S3.tbArm.rotation.x=(S.defSign>0?1:-1)*(S.tb.throwT>0?-1.1*S.tb.throwT:0.9);
+ const sf=S3.stoneFly;
+ if(sf){sf.t+=(B.paused?0:B.speed)/60;const p=Math.min(1,sf.t/sf.dur);
+  S3.stone.visible=p<1;S3.stone.position.set(sf.sx+(sf.ex-sf.sx)*p,Hgt(sf.sx,sf.sz)+9+(Hgt(sf.ex,sf.ez)+5-Hgt(sf.sx,sf.sz)-9)*p+Math.sin(Math.PI*p)*22,sf.sz+(sf.ez-sf.sz)*p);
+  if(p>=1)S3.stoneFly=null}
+ if(S3.wallTowers&&S.towers.some(t=>t.dead&&!t.hidden)){
+  S.towers.forEach((t,i)=>{if(t.dead&&!t.hidden){t.hidden=true;dm.position.set(t.x,-50,W);dm.scale.set(0.01,0.01,0.01);dm.updateMatrix();
+   for(const m of S3.wallTowers){m.setMatrixAt(i,dm.matrix);m.instanceMatrix.needsUpdate=true}dm.scale.set(1,1,1)}})}
+ for(const r of B.regs){if(!(r.climb>0)||!alive(r)||r.state==='tower')continue;
   const s=wallSide(r.z);
   for(const dx of [-3,0,3]){if(n>=60)break;dm.position.set(r.x+dx,Hgt(r.x,W)-0.4,W+s*2.2);dm.rotation.set(-s*0.32,0,0);dm.scale.set(1,1,1);dm.updateMatrix();S3.ladders.setMatrixAt(n++,dm.matrix)}}
  dm.rotation.set(0,0,0);
