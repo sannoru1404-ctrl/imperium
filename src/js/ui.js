@@ -1,4 +1,4 @@
-import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS, FAITHS, faithOf } from './data.js';
+import { winN, winTarget, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS, FAITHS, faithOf } from './data.js';
 import * as D from './diplo.js';
 import { RANK } from './diplo.js';
 import { DIPLO } from './data.js';
@@ -24,7 +24,7 @@ export function ask(title,body,btns){
 }
 export function toast(t){addLog(t);render()}
 export function showHelp(){modal(`<h2>Как играть</h2>
-<p><b>Цель:</b> собери ${WIN_N} земель или сокруши все остальные великие державы. Потеряешь все земли — конец.</p>
+<p><b>Цель:</b> собери ${winN()} земель (у каждой державы своя цель: стартовые земли + 22) или сокруши все остальные великие державы. Потеряешь все земли — конец.</p>
 <p><b>Карта:</b> двигай пальцем, двумя пальцами — масштаб (или кнопки ＋ ／ − ／ ◎). Нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
 <p><b>Казна и постройки:</b> земли приносят золото, войска стоят содержания. В каждой земле есть места под постройки: казармы, стрельбища и конюшни открывают отряды, пашни и торг дают доход, храм — порядок, стены — защиту. Город выше уровнем — больше мест и найма.</p>
 <p><b>Еда (🌾):</b> её дают земли (особенно малые сельские) и пашни, едят города побольше и каждый полк. Излишек идёт в амбары (до 60). Когда амбары пусты, а еды не хватает — голод: порядок −15 везде, полки не пополняются. Войско в осаде или в только что взятой земле теряет людей.</p>
@@ -74,9 +74,9 @@ const DIFF={rus:'средне',pol:'средне',hre:'легко',hun:'сред
 export function showNewGame(){
  const rows=MAJORS.map(f=>{const F=FACT[f];const n=PROV_DEF.filter(d=>d[4]===f).length;
   return `<div class="rec" style="align-items:flex-start;gap:10px"><div style="flex:1"><div><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${F.c};margin-right:6px;vertical-align:-1px"></span><b>${F.emblem} ${F.n}</b></div>
-   <div class="small" style="margin:3px 0">${F.d}</div><div class="small">Земель: ${n} · сложность: ${DIFF[f]}</div></div>
+   <div class="small" style="margin:3px 0">${F.d}</div><div class="small">Земель: ${n} · цель: ${winTarget(f)} · сложность: ${DIFF[f]}</div></div>
    <button class="pri" onclick="startGame('${f}')">Играть</button></div>`}).join('');
- modal(`<h2>Выбери державу</h2><p class="small">Европа, ${1100} год. Цель — ${WIN_N} земель или гибель всех остальных великих держав.</p>${rows}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Назад</button></div>`);
+ modal(`<h2>Выбери державу</h2><p class="small">Европа, ${1100} год. Цель — собрать нужное число земель или добиться гибели всех остальных великих держав.</p>${rows}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Назад</button></div>`);
 }
 export function startGame(f){closeModal();newGame(undefined,f)}
 
@@ -90,7 +90,7 @@ export function showRealm(tab){
  if(REALM_TAB==='sum'){
   const own=G.prov.filter(p=>p.owner===f);
   const low=own.filter(p=>orderOf(p)<0);
-  body=`<p>Вера: <b>${FAITHS[faithOf(f)].i} ${FAITHS[faithOf(f)].n}</b> · Земель: <b>${own.length}</b> из ${WIN_N} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
+  body=`<p>Вера: <b>${FAITHS[faithOf(f)].i} ${FAITHS[faithOf(f)].n}</b> · Земель: <b>${own.length}</b> из ${winN()} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
   <p>Доход: <b>+${inc.inc}</b> · Содержание войск: <b>−${inc.up}</b> · Итого: <b style="color:${inc.net>=0?'#7bc96f':'#e57373'}">${inc.net>=0?'+':''}${inc.net}</b> в год</p>
   ${(()=>{const fd=foodOf(f);return `<p>Еда: урожай <b>+${fd.prod}</b> · едят города и войска <b>−${fd.use}</b> · итого <b style="color:${fd.net>=0?'#7bc96f':'#e57373'}">${fd.net>=0?'+':''}${fd.net}</b> · в амбарах <b>${fd.store}</b>/60${starving(f)?' · <b style="color:#e57373">голод: порядок −15, полки не пополняются</b>':fd.net<0?' · <span style="color:#e0b34a">амбары пустеют</span>':''}</p>`})()}
   <p>Провинций целиком: <b>${fullProvinces(f).length}</b> · указов: <b>${fullProvinces(f).filter(pv=>provEdict(pv)!=='none').length}</b> · Изучается: <b>${F.res?TECH[F.res.id].n+` (${F.res.pts}/${TECH[F.res.id].cost})`:'ничего'}</b> (+${researchPoints(f)} в год)</p>

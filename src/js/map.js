@@ -1,4 +1,4 @@
-import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI, BUILDINGS, UNIT_REQ , MAX_ARMY, SETTLE_COST, UNIT_UPKEEP, GEN_UPKEEP } from './data.js';
+import { FACT, UT, RECRUIT, uname, ADJ, winN, PLAYER, FORMS, START_YEAR, AI, BUILDINGS, UNIT_REQ , MAX_ARMY, SETTLE_COST, UNIT_UPKEEP, GEN_UPKEEP } from './data.js';
 import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS, PROVINCE_BORDERS } from './mapdata.js';
 import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
@@ -83,7 +83,7 @@ export function render(recenter){
  const f=G.fac[PLAYER], inc=income(PLAYER);
  $('sGold').innerHTML=`💰 ${f.gold} <span class="small" style="color:${inc.net>=0?'#7bc96f':'#e57373'}">${inc.net>=0?'+':''}${inc.net}</span>`;
  {const fd=foodOf(PLAYER),bad=starving(PLAYER);$('sFood').innerHTML=`<span style="color:${bad?'#e57373':fd.net<0?'#e0b34a':'inherit'}">🌾${fd.net>=0?'+':''}${fd.net}${bad?' голод':''}</span>`}
- $('sTurn').innerHTML=`📜 ${START_YEAR-1+G.turn} · 🏰 ${G.prov.filter(p=>p.owner===PLAYER).length}/${WIN_N}`;
+ $('sTurn').innerHTML=`📜 ${START_YEAR-1+G.turn} · 🏰 ${G.prov.filter(p=>p.owner===PLAYER).length}/${winN()}`;
  $('sFac').textContent=FACT[PLAYER].emblem||'⚑';
  $('log').innerHTML=G.log.slice(0,2).map((l,i)=>`<div style="opacity:${1-i*0.4}">${l}</div>`).join('');
  if(!built)buildStatic();
@@ -230,7 +230,10 @@ export async function moveArmy(from,to){
 }
 export function capture(p,f,units){
  const old=p.owner;p.owner=f;p.army=units;p.gar=1;p.moved=true;p.occ=AI.occupationTurns;p.stance='none';p.mstep=0;
- addLog(`${FACT[f].n}: захвачена провинция ${p.n}!`);
+ // the victors take the town's treasure: conquest pays for the next campaign
+ const loot=Math.round(p.base*(1+p.lvl)*AI.lootMult);
+ if(G.fac[f])G.fac[f].gold+=loot;
+ addLog(`${FACT[f].n}: взята земля ${p.n}!${f===PLAYER?` Добыча: ${loot} золота.`:''}`);
  if(old!=='rebel'&&capOf(old)===p.id){
   // the capital moves to the richest remaining land
   const rest=G.prov.filter(q=>q.owner===old).sort((a,b)=>b.base*b.lvl-a.base*a.lvl);

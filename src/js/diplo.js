@@ -223,7 +223,7 @@ export function aiDiplomacy(){
     const fm=sameFaith(a,b)?FAITH.warSame:FAITH.warOther;
     const tm=r==='nap'?0.3:r==='trade'?0.4:1;
     const helpers=alliesOf(b,'def').reduce((s,c)=>s+power(c),0)*0.5;   // the victim's allies deter
-    if(pa/Math.max(1,pb+helpers)>1.6&&mood&&warsOf(a).length<2&&rand()<DIPLO.warChance*fm*tm)declareWar(a,b);
+    if(pa/Math.max(1,pb+helpers)>DIPLO.warRatio&&mood&&warsOf(a).length<2&&rand()<DIPLO.warChance*fm*tm)declareWar(a,b);
     else if(b!==PLAYER){
      const same=sameFaith(a,b),allies=x=>alliesOf(x,'def').length;
      const foe=warsOf(a).some(x=>atWar(b,x));

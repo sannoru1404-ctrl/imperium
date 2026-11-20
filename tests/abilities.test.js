@@ -28,7 +28,7 @@ function fight(a, d, s, use, gen) {
   const hp = res.att.reduce((s2, u) => s2 + u.hp, 0);
   return { win: res.win === 'att', hp };
 }
-const N = Number(process.env.RUNS || 10);
+const N = Math.max(10, Number(process.env.RUNS || 10));
 const near = (r, d) => sim.B.regs.some(e => e.side === 'e' && sim.alive(e) && !e.routing && sim.rdist(r, e) < d);
 function rate(a, d, use) { let w = 0, hp = 0; for (let i = 0; i < N; i++) { seed(i + 1); const x = fight(a, d, 500 + i, use); if (x.win) w++; hp += x.hp; } return { w: Math.round(100 * w / N), hp: Math.round(hp / N) }; }
 

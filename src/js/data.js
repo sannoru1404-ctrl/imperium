@@ -146,12 +146,18 @@ export const START_ARMY={
 };
 export const START_ARMY_CULT={steppe:t=>t==='arch'?'hasb':t};
 export const START_GOLD={major:1200,minor:600};
-export const WIN_N=35;      // regions needed for victory
+// Victory: each great power needs its starting lands + WIN.extra, within [min, max] (a small realm has less to conquer)
+export const WIN={extra:22,min:28,max:34};
+export function winTarget(f){const n=PROV_DEF.filter(d=>d[4]===f).length;return Math.max(WIN.min,Math.min(WIN.max,n+WIN.extra))}
+export function winN(){return winTarget(PLAYER)}
 // Campaign AI tuning
-export const AI={attackRatio:1.45,majorRatio:1.5,  // AI kingdoms are wary of attacking each other
+export const AI={attackRatio:1.3,majorRatio:1.35,siegeRatio:0.85,  // siegeRatio: blockade walls when this strong vs army + garrison
+  // AI kingdoms are wary of attacking each other
  playerGraceTurns:8,playerBias:0.9,aggressive:{},
  maxAttacksPerTurn:3,   // each AI faction starts at most this many battles a year
- occupationTurns:2,     // a conquered land pays no taxes for this many years
+ occupationTurns:1,     // a conquered land pays no taxes for this many years
+ lootMult:1.5,
+ guardBorder:4,guardInner:2,   // regiments the AI raises in a land without a general          // gold taken with a town: base income × (1 + town level) × this
  provinceBias:1.3};     // AI prefers a target that completes one of its provinces (×1.15 if it only adds to one)
 // Independent lands: garrison size and a small standing force that regrows
 export const REBELS={garBonus:1,armyEvery:4,armyMax:2,unit:['spear','arch','druzh']};
@@ -164,8 +170,8 @@ export const BUILDINGS={
  barracks:{n:'Казармы',     i:'⚔️',lv:[{cost:300,unlock:['spear']},{cost:650,unlock:['druzh']}]},
  range:   {n:'Стрельбище',  i:'🏹',lv:[{cost:300,unlock:['arch']},{cost:650,unlock:['xbow']}]},
  stable:  {n:'Конюшни',     i:'🐎',lv:[{cost:400,unlock:['hasb']},{cost:900,unlock:['knight']}]},
- farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.1,food:3},{cost:500,inc:0.2,food:3},{cost:900,inc:0.3,food:3}]},
- market:  {n:'Торг',        i:'⚖️',lv:[{cost:350,gold:30},{cost:700,gold:60},{cost:1200,gold:100}]},
+ farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.05,food:3},{cost:500,inc:0.1,food:3},{cost:900,inc:0.15,food:3}]},
+ market:  {n:'Торг',        i:'⚖️',lv:[{cost:350,gold:25},{cost:700,gold:40},{cost:1200,gold:60}]},
  church:  {n:'Храм',        i:'⛪',lv:[{cost:300,order:10,faith:1},{cost:650,order:20,faith:1},{cost:1100,order:30,faith:1}]},
  walls:   {n:'Стены',       i:'🧱',lv:[{cost:400,gar:2,wall:1},{cost:900,gar:4,wall:2}]},
 };
@@ -206,7 +212,7 @@ export const TECH={
 // Public order and revolts
 export const ORDER={base:10,occupied:-40,foreign:-15,perGarrison:3,maxGarrison:15,poorBelow:-20,revoltAt:10};
 // Army limit: number of generals a state may field
-export function maxGeneralsFor(regions){return Math.min(10,1+Math.floor(regions/4))}
+export function maxGeneralsFor(regions){return Math.min(12,2+Math.floor(regions/3))}
 
 // ===================== DIPLOMACY =====================
 // Relations between states form a ladder: 'war' < 'peace' < 'nap' (non-aggression) < 'trade' < 'def' (defensive alliance)
@@ -216,11 +222,11 @@ export const START_WARS=[['rus','cuman'],['byz','sel'],['cru','fat'],['cru','sel
 export const START_ALLIES=[['byz','ven'],['hre','boh'],['rus','pol']];
 export const START_TRADE=[['ven','sic'],['den','swe'],['novg','swe'],['eng','den'],['rus','byz']];
 export const SETTLE_COST=600;      // ×current level to grow a settlement
-export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.06,peaceChance:0.12,minWarYears:4,
+export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.12,peaceChance:0.08,minWarYears:6,warRatio:1.25,
  vassalTax:0.2,        // share of a vassal's land income paid to the overlord
  tribShare:0.15,tribYears:10, // tribute: share of the payer's land income, for this many years
  maxAllies:2,          // AI states keep at most this many alliances (def + ally)
- napChance:0.05,tradeChance:0.04,defChance:0.02};
+ napChance:0.03,tradeChance:0.03,defChance:0.02};
 
 // ===================== VETERANS & GENERALS =====================
 // Units gain experience (0..3 stars) by surviving battles: each star +0.5 atk/def and +5 morale.

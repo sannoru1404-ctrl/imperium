@@ -1,4 +1,4 @@
-import { FACT, UT, RECRUIT, WIN_N, PLAYER, aiFactions, AI, START_YEAR, REBELS, MAJORS , MAX_ARMY, SETTLE_COST } from './data.js';
+import { FACT, UT, RECRUIT, winN, PLAYER, aiFactions, AI, START_YEAR, REBELS, MAJORS , MAX_ARMY, SETTLE_COST } from './data.js';
 import { $, rnd, sleep } from './util.js';
 import { G, mk, P, adj, newGame, save, addLog, income, str, garUnits, capOf } from './state.js';
 import { render, capture, applyBattle, recruit, upgrade } from './map.js';
@@ -51,7 +51,7 @@ export function checkEnd(){
  if(n===0){G.over=true;save();modal(`<h2>Держава пала</h2><p>У тебя не осталось ни одной земли. Твоё правление окончилось в ${START_YEAR-1+G.turn} году.</p><button class="pri" onclick="closeModal();showNewGame()">Новая игра</button>`);return}
  const rivals=MAJORS.filter(f=>f!==PLAYER);
  const rivalsGone=rivals.every(f=>!G.prov.some(p=>p.owner===f));
- if(n>=WIN_N||rivalsGone){G.over=true;save();modal(`<h2>${FACT[PLAYER].emblem} Слава!</h2><p>${rivalsGone?'Все великие державы пали перед тобой.':`Под твоей рукой ${n} земель.`} Ты создал великую державу за ${G.turn} лет. Слава ${ruler}!</p><button class="pri" onclick="closeModal();showNewGame()">Новая игра</button>`)}
+ if(n>=winN()||rivalsGone){G.over=true;save();modal(`<h2>${FACT[PLAYER].emblem} Слава!</h2><p>${rivalsGone?'Все великие державы пали перед тобой.':`Под твоей рукой ${n} земель.`} Ты создал великую державу за ${G.turn} лет. Слава ${ruler}!</p><button class="pri" onclick="closeModal();showNewGame()">Новая игра</button>`)}
 }
 
 export async function aiTurn(f){
@@ -74,7 +74,9 @@ export async function aiTurn(f){
  for(const p of rp){
   const pool=RECRUIT[f].filter(t=>!UT[t].general&&unitAvailable(p,t));
   const bag=[];pool.forEach(t=>{for(let i=0;i<(w[t]||1);i++)bag.push(t)});
-  while(p.army.length<MAX_ARMY&&p.rec<p.lvl){
+  // field armies grow under generals; other lands keep only a small guard
+  const cap=hasGen(p)?MAX_ARMY:border(p)?AI.guardBorder:AI.guardInner;
+  while(p.army.length<cap&&p.rec<p.lvl){
    const needGen=!hasGen(p)&&border(p)&&generals(f)<maxGenerals(f);
    const t=needGen&&F.gold>=unitCost(f,'gen',p)?'gen':bag[Math.floor(rand()*bag.length)];
    if(!t)break;
@@ -98,15 +100,16 @@ export async function aiTurn(f){
   let best=null,bs=0,bscore=0;
   adj(p.id).forEach(a=>{const t=P(a);if(t.owner===f)return;
    if(t.owner!=='rebel'&&!atWar(f,t.owner))return;
-   const ds=str(t.army)+str(garUnits(t),1.2)+reliefStr(t)+0.1;let r=s/ds;
+   // our own neighbouring army joins the battle too, just as theirs does
+   const ds=str(t.army)+str(garUnits(t),1.2)+reliefStr(t)+0.1;let r=(s+reliefStr(t,f,p))/ds;
    if(t.owner===PLAYER){if(G.turn<AI.playerGraceTurns)return;r*=AI.playerBias}
    else if(t.owner!=='rebel')r*=aggr/AI.majorRatio;
-   if(r<=aggr)return;
+   if(r<=aggr&&!(wallLevel(t)&&!t.siege&&r>AI.siegeRatio))return;   // too strong to storm, but a walled town can be starved
    // among the targets worth attacking, prefer one that rounds off a province
    const rest=provinceOf(t.id).regs.filter(id=>id!==t.id),mineN=rest.filter(id=>P(id).owner===f).length;
    const score=r*(mineN&&mineN===rest.length?AI.provinceBias:mineN?(1+AI.provinceBias)/2:1);
    if(score>bscore){bscore=score;bs=r;best=t}});
-  if(best&&bs>aggr&&attacks<AI.maxAttacksPerTurn){
+  if(best&&attacks<AI.maxAttacksPerTurn){
    // keep enough at home to face the strongest neighbouring army (anyone's, not only the player's)
    const threat=Math.max(0,...adj(p.id).map(P).filter(t=>t.owner!==f&&t!==best).map(t=>str(t.army)));
    const need=threat*(capOf(f)===p.id?1.0:0.7)-str(garUnits(p),1.2);
@@ -118,9 +121,9 @@ export async function aiTurn(f){
    const sm=siegeMods(best,f);
    const ds=str(best.army)*sm[1]*(stanceOf(best)==='camp'?1.25:1)+str(garUnits(best),sm[0])+reliefStr(best)+0.1;
    if(!units.length)continue;
-   if(str(units)/ds<=aggr){
+   if((str(units)+reliefStr(best,f,p))/ds<=aggr){
     // walls too strong to storm: blockade the town instead and starve it out
-    if(wallLevel(best)&&!best.siege&&str(units)/(str(best.army)+str(garUnits(best),1.2)+0.1)>1.1){startSiege(p,best,f)}
+    if(wallLevel(best)&&!best.siege&&str(units)/(str(best.army)+str(garUnits(best),1.2)+0.1)>AI.siegeRatio){startSiege(p,best,f)}
     continue;
    }
    attacks++;

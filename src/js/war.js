@@ -73,9 +73,9 @@ export function gatherReinforcements(from,to,af,attUnits,defUnits){
  return list;
 }
 // how strong a relief army the defender of `to` can bring (to weigh an attack)
-export function reliefStr(to){
- if(to.owner==='rebel')return 0;
- return Math.max(0,...adj(to.id).map(P).filter(p=>p.owner===to.owner&&!p.besiege&&p.army.some(isGen)).map(p=>str(p.army)));
+export function reliefStr(to,f=to.owner,from=null){
+ if(f==='rebel')return 0;
+ return Math.max(0,...adj(to.id).map(P).filter(p=>p!==from&&p!==to&&p.owner===f&&!p.besiege&&p.army.some(isGen)).map(p=>str(p.army)));
 }
 export function reinfText(list,side){const l=list.filter(x=>x.side===side);if(!l.length)return '';return `<p class="small">🛡 Подкрепления: ${l.map(x=>`${x.p.n} (${x.p.army.length})`).join(', ')}</p>`}
 // after the battle: reinforcements go home (the dead stay on the field), and are removed from the result
@@ -168,7 +168,7 @@ export function runEvents(){
 }
 // event hosts get supplies from home every year
 export function eventSupply(){
- for(const ev of EVENTS)if(G.ev&&G.ev[ev.id]&&G.prov.some(p=>p.owner===ev.id))G.fac[ev.id].gold+=ev.id==='mong'?500:250;
+ for(const ev of EVENTS)if(G.ev&&G.ev[ev.id]&&G.prov.some(p=>p.owner===ev.id))G.fac[ev.id].gold+=ev.id==='mong'?350:250;
 }
-export const EVENT_AGGR=1.15;
+export const EVENT_AGGR=1.4;
 export { isGen, MAX_ARMY };
