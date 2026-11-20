@@ -38,6 +38,34 @@ export const FACT={
  mong:{n:'Монгольская орда',c:'#4a2d6b',tc:'#c9b6e6',cult:'steppe',cap:null,emblem:'🏹',event:1},
  rebel:{n:'Независимые земли',c:'#8a8278',tc:'#d0c8bc',cult:'west'},
 };
+// ===================== RELIGION =====================
+export const FAITHS={
+ orth:{n:'Православие',i:'☦'},
+ cath:{n:'Католичество',i:'✝'},
+ islam:{n:'Ислам',i:'☪'},
+ pagan:{n:'Язычество',i:'🌳'},
+};
+const FAITH_OF={rus:'orth',byz:'orth',novg:'orth',suzd:'orth',cher:'orth',polo:'orth',
+ sel:'islam',fat:'islam',alm:'islam',cuman:'pagan',mong:'pagan'};
+export function faithOf(f){return FAITH_OF[f]||'cath'}
+// who the people of a land pray to in 1100 when it differs from its owner (shares sum to 1)
+export const REGION_FAITH={
+ lith:{pagan:1},pruss:{pagan:1},cour:{pagan:1},livon:{pagan:1},estl:{pagan:1},tavas:{pagan:1},karel:{pagan:.8,orth:.2},
+ szcz:{pagan:.7,cath:.3},gdan:{pagan:.6,cath:.4},
+ galich:{orth:1},peremy:{orth:1},ras:{orth:1},dukl:{orth:.7,cath:.3},bosn:{cath:.5,orth:.5},
+ georg:{orth:1},alan:{orth:.7,pagan:.3},armen:{orth:1},tarsu:{orth:.6,islam:.4},
+ alepp:{islam:1},damas:{islam:1},tripl:{islam:.7,orth:.3},mosul:{islam:1},bagh:{islam:1},
+ antio:{orth:.5,islam:.3,cath:.2},edess:{orth:.6,islam:.3,cath:.1},jerus:{islam:.4,orth:.4,cath:.2},
+ mahd:{islam:1},tripo:{islam:1},beja:{islam:1},barca:{islam:1},
+ zarag:{islam:1},valen:{islam:.9,cath:.1},balea:{islam:1},grana:{islam:.9,cath:.1},toled:{cath:.7,islam:.3},
+ paler:{cath:.4,islam:.4,orth:.2},cosen:{orth:.5,cath:.5},bari:{cath:.7,orth:.3},
+ konya:{islam:.4,orth:.6},ankar:{islam:.4,orth:.6},kays:{islam:.4,orth:.6},melit:{islam:.4,orth:.6},
+};
+// drift: share of the owner's faith gained per year (base + per temple level), order at 0% owner's faith
+export const FAITH={drift:0.02,church:0.03,order:-20,
+ attSame:0.5,attOther:-0.5,          // yearly attitude drift towards the player
+ warOther:1.6,warSame:0.6,           // AI war chance multiplier against other / same faith
+ allySame:15,allyOther:-15};         // alliance proposal score
 export function aiFactions(){return Object.keys(FACT).filter(f=>f!==PLAYER&&f!=='rebel')}
 
 // Unit types.
@@ -121,7 +149,7 @@ export const BUILDINGS={
  stable:  {n:'Конюшни',     i:'🐎',lv:[{cost:400,unlock:['hasb']},{cost:900,unlock:['knight']}]},
  farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.1,food:3},{cost:500,inc:0.2,food:3},{cost:900,inc:0.3,food:3}]},
  market:  {n:'Торг',        i:'⚖️',lv:[{cost:350,gold:30},{cost:700,gold:60},{cost:1200,gold:100}]},
- church:  {n:'Храм',        i:'⛪',lv:[{cost:300,order:10},{cost:650,order:20},{cost:1100,order:30}]},
+ church:  {n:'Храм',        i:'⛪',lv:[{cost:300,order:10,faith:1},{cost:650,order:20,faith:1},{cost:1100,order:30,faith:1}]},
  walls:   {n:'Стены',       i:'🧱',lv:[{cost:400,gar:2,wall:1},{cost:900,gar:4,wall:2}]},
 };
 // which building level a unit needs (mil and gen need nothing)

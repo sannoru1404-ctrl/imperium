@@ -1,5 +1,5 @@
 // Campaign rules: income, upkeep, public order, buildings, decrees, technologies, generals.
-import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS, FOOD } from './data.js';
+import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS, FOOD, FAITHS, FAITH, faithOf } from './data.js';
 import { G, P, mk, addLog } from './state.js';
 import { rand } from './rng.js';
 import { tradeIncome } from './diplo.js';
@@ -66,6 +66,7 @@ export function buildingEffect(b,l){
  if(e.gold)x.push(`+${e.gold} золота`);
  if(e.order)x.push(`порядок +${e.order}`);
  if(e.food)x.push(`еда +${e.food}`);
+ if(e.faith)x.push(`вера держателя +${Math.round(FAITH.church*100)}% в год`);
  if(e.gar)x.push(`гарнизон +${e.gar}`);
  if(e.wall)x.push(e.wall>1?'каменные стены':'деревянные стены');
  return x.join(', ');
@@ -116,6 +117,21 @@ export function foodYear(){
  }
 }
 
+// ---------- religion ----------
+// p.rel = {faith: share}; the owner's faith slowly spreads, temples speed it up
+export function faithShare(p,fa){return (p.rel&&p.rel[fa])||0}
+export function mainFaith(p){let best='cath',bs=-1;for(const fa in p.rel||{})if(p.rel[fa]>bs){bs=p.rel[fa];best=fa}return best}
+export function faithDrift(p){return FAITH.drift+FAITH.church*sumEffect(p,'faith')}
+function spreadFaith(p){
+ if(p.owner==='rebel'||!p.rel)return;
+ const fa=faithOf(p.owner),cur=faithShare(p,fa);if(cur>=1)return;
+ const gain=Math.min(1-cur,faithDrift(p)),k=(1-cur-gain)/(1-cur);
+ for(const x in p.rel)if(x!==fa)p.rel[x]=Math.round(p.rel[x]*k*1000)/1000;
+ p.rel[fa]=Math.round((cur+gain)*1000)/1000;
+ for(const x in p.rel)if(p.rel[x]<=0.005)delete p.rel[x];
+}
+export function faithOrder(p){return p.owner==='rebel'||!p.rel?0:Math.round(FAITH.order*(1-faithShare(p,faithOf(p.owner))))}
+
 // ---------- order ----------
 export function orderOf(p){
  if(p.owner==='rebel')return 0;
@@ -130,6 +146,7 @@ export function orderOf(p){
  if(hasTech(f,'civ3'))o+=10;
  if(p.raided>0)o-=10;                 // plundered by raiders
  if(starving(f))o+=FOOD.famineOrder;
+ o+=faithOrder(p);
  return Math.max(-100,Math.min(100,o));
 }
 
@@ -172,6 +189,7 @@ export function income(f){
 // ---------- yearly processing (for every state) ----------
 export function yearlyUpdate(){
  for(const p of G.prov){
+  spreadFaith(p);
   // construction finishes
   if(p.cons){p.b=p.b||{};p.b[p.cons.b]=p.cons.lvl;
    if(p.owner===PLAYER)addLog(`${p.n}: построено — ${BUILDINGS[p.cons.b].n.toLowerCase()} (ур. ${p.cons.lvl}).`);
@@ -219,7 +237,7 @@ export function aiEconomy(f){
  let built=0;
  for(const p of towns){
   if(built>=3||F.gold<800)break;
-  for(const b of order){const o=buildOptions(p).find(x=>x.b===b);if(o&&o.ok&&F.gold-o.cost>500){startBuild(p,b);built++;break}}
+  for(const b of (faithOrder(p)<-8?['church',...order]:order)){const o=buildOptions(p).find(x=>x.b===b);if(o&&o.ok&&F.gold-o.cost>500){startBuild(p,b);built++;break}}
  }
  // grow settlements when rich
  if(F.gold>2500&&!hungry){const p=own.filter(p=>p.lvl<3).sort((a,b)=>b.base-a.base)[0];if(p){F.gold-=SETTLE_COST*p.lvl;p.lvl++}}

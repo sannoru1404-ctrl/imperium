@@ -1,4 +1,4 @@
-import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS } from './data.js';
+import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS, FAITHS, faithOf } from './data.js';
 import * as D from './diplo.js';
 import { foodOf, starving, income, orderOf, generals, maxGenerals, provEdict, setEdict, ownsProvince, fullProvinces, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
 const PLAYER_=()=>PLAYER;
@@ -26,6 +26,7 @@ export function showHelp(){modal(`<h2>Как играть</h2>
 <p><b>Карта:</b> двигай пальцем, двумя пальцами — масштаб (или кнопки ＋ ／ − ／ ◎). Нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
 <p><b>Казна и постройки:</b> земли приносят золото, войска стоят содержания. В каждой земле есть места под постройки: казармы, стрельбища и конюшни открывают отряды, пашни и торг дают доход, храм — порядок, стены — защиту. Город выше уровнем — больше мест и найма.</p>
 <p><b>Еда (🌾):</b> её дают земли (особенно малые сельские) и пашни, едят города побольше и каждый полк. Излишек идёт в амбары (до 60). Когда амбары пусты, а еды не хватает — голод: порядок −15 везде, полки не пополняются. Войско в осаде или в только что взятой земле теряет людей.</p>
+<p><b>Вера:</b> в каждой земле живут люди разной веры. Чем меньше в земле твоей веры, тем ниже порядок (до −20). Твоя вера растёт сама по 2% в год, каждый уровень храма — ещё +3%. Державы другой веры охотнее нападают и труднее идут в союз.</p>
 <p><b>Порядок:</b> падает в захваченных и чужих по культуре землях и от податей. Если долго ниже нуля — бунт. Помогают войско в земле, храм и указ «Правда и покой».</p>
 <p><b>Провинции:</b> земли объединены в провинции по 2–4 (толстые границы на карте). Возьми провинцию целиком — доход +15%, порядок +5 и можно издать в ней указ. Столица провинции успокаивает остальные её земли.</p>
 <p><b>Держава (☰):</b> провинции и указы, знания (технологии), послы: мир, торговля, союз, война. Нападать можно только на тех, с кем война, и на вольные земли.</p>
@@ -85,7 +86,7 @@ export function showRealm(tab){
  if(REALM_TAB==='sum'){
   const own=G.prov.filter(p=>p.owner===f);
   const low=own.filter(p=>orderOf(p)<0);
-  body=`<p>Земель: <b>${own.length}</b> из ${WIN_N} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
+  body=`<p>Вера: <b>${FAITHS[faithOf(f)].i} ${FAITHS[faithOf(f)].n}</b> · Земель: <b>${own.length}</b> из ${WIN_N} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
   <p>Доход: <b>+${inc.inc}</b> · Содержание войск: <b>−${inc.up}</b> · Итого: <b style="color:${inc.net>=0?'#7bc96f':'#e57373'}">${inc.net>=0?'+':''}${inc.net}</b> в год</p>
   ${(()=>{const fd=foodOf(f);return `<p>Еда: урожай <b>+${fd.prod}</b> · едят города и войска <b>−${fd.use}</b> · итого <b style="color:${fd.net>=0?'#7bc96f':'#e57373'}">${fd.net>=0?'+':''}${fd.net}</b> · в амбарах <b>${fd.store}</b>/60${starving(f)?' · <b style="color:#e57373">голод: порядок −15, полки не пополняются</b>':fd.net<0?' · <span style="color:#e0b34a">амбары пустеют</span>':''}</p>`})()}
   <p>Провинций целиком: <b>${fullProvinces(f).length}</b> · указов: <b>${fullProvinces(f).filter(pv=>provEdict(pv)!=='none').length}</b> · Изучается: <b>${F.res?TECH[F.res.id].n+` (${F.res.pts}/${TECH[F.res.id].cost})`:'ничего'}</b> (+${researchPoints(f)} в год)</p>
@@ -99,7 +100,7 @@ export function showRealm(tab){
    const btn=(k,n)=>{const [ok]=D.proposal(x,k);return `<button onclick="diplo('${x}','${k}')" ${ok?'':'style="opacity:.55"'}>${n}</button>`};
    const acts=r==='war'?btn('peace','🕊 Мир'):r==='peace'?btn('trade','⚖️ Торговля')+btn('ally','🤝 Союз')+`<button onclick="diplo('${x}','war')">⚔ Война</button>`:r==='trade'?btn('ally','🤝 Союз')+`<button onclick="diplo('${x}','war')">⚔ Война</button>`:`<button onclick="diplo('${x}','war')">⚔ Война</button>`;
    return `<div class="rec" style="flex-wrap:wrap"><div style="min-width:150px;flex:1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${FACT[x].c};margin-right:5px"></span><b>${FACT[x].n}</b>
-    <div class="small">${D.REL_I[r]} ${D.REL_N[r]}${D.borders(f,x)?' · сосед':''} · отношение <span style="color:${a>=20?'#7bc96f':a>=-10?'#e0b34a':'#e57373'}">${a>0?'+':''}${a}</span> · сила ${Math.round(D.power(x))}</div></div>
+    <div class="small">${D.REL_I[r]} ${D.REL_N[r]} · ${FAITHS[faithOf(x)].i}${D.borders(f,x)?' · сосед':''} · отношение <span style="color:${a>=20?'#7bc96f':a>=-10?'#e0b34a':'#e57373'}">${a>0?'+':''}${a}</span> · сила ${Math.round(D.power(x))}</div></div>
     <div class="row" style="gap:4px">${acts}</div></div>`}).join('');
  } else if(REALM_TAB==='edict'){
   const mine=Object.values(PROVINCES).filter(pv=>pv.regs.some(id=>P(id).owner===f));

@@ -4,10 +4,10 @@ import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
 import { checkEnd, autoResolve, siegeMods, siegeOpts, startSiege, hasRam } from './turn.js';
 import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
-import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost, provinceOf, ownsProvince, isProvCap, edictAt, foodOf, regionFood, starving } from './rules.js';
+import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost, provinceOf, ownsProvince, isProvCap, edictAt, foodOf, regionFood, starving, faithOrder } from './rules.js';
 import { B, tactical } from './battle-sim.js';
 import { modal, closeModal, ask, toast } from './ui.js';
-import { STANCES, TRAITS, EDICTS, PROVINCE_BONUS } from './data.js';
+import { STANCES, TRAITS, EDICTS, PROVINCE_BONUS, FAITHS } from './data.js';
 import { gatherReinforcements, reinfText, afterBattle, stanceOf, setStanceOf, stanceMods, genLabel, stars, makeGeneral, isGen } from './war.js';
 
 // ===================== MAP RENDER =====================
@@ -131,6 +131,7 @@ export function drawPanel(){
  <div class="small" style="white-space:nowrap">💰${p.occ>0?'0':provIncome(p)} · 🌾${regionFood(p)>=0?'+':''}${regionFood(p)} · 🔱${p.gar}${own?' · '+orderBadge(p):''}</div></div>`;
  {const pv=provinceOf(p.id),n=pv.regs.filter(id=>P(id).owner===p.owner).length,whole=ownsProvince(p.owner,pv.id),e=edictAt(p);
   h+=`<div class="small" style="margin-top:3px">🗺 <a href="#" style="color:var(--gold)" onclick="event.preventDefault();showRealm('edict')">${pv.n}</a>${isProvCap(p)?' · столица провинции':''} · ${whole?`вся (доход +${Math.round(PROVINCE_BONUS.inc*100)}%, порядок +${PROVINCE_BONUS.order})`:`${n}/${pv.regs.length}`}${e!=='none'?` · ${EDICTS[e].i} ${EDICTS[e].n}`:''}</div>`}
+ if(p.rel){const fo=faithOrder(p);h+=`<div class="small">${Object.keys(p.rel).sort((a,b)=>p.rel[b]-p.rel[a]).map(x=>`${FAITHS[x].i} ${FAITHS[x].n} ${Math.round(p.rel[x]*100)}%`).join(' · ')}${fo<0?` <span style="color:#e57373">(порядок ${fo})</span>`:''}</div>`}
  if(p.siege)h+=`<div class="small" style="color:#e0b34a;margin-top:4px">⛺ Осада: ${FACT[p.siege.f].n}, ${p.siege.turns} г.${p.siege.turns>=1?' · таран готов':''} · сдастся через ${Math.max(0,2+wallLevel(p)-p.siege.turns)} г.</div>`;
  if(own)h+=`<div class="tabs"><button class="${PANEL_TAB==='army'?'on':''}" onclick="setTab('army')">⚔ Войско</button><button class="${PANEL_TAB==='build'?'on':''}" onclick="setTab('build')">🏗 Постройки ${usedSlots(p)}/${slots(p)}</button></div>`;
  if(!own||PANEL_TAB==='army'){

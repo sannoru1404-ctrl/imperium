@@ -1,5 +1,5 @@
 // Diplomacy: war / peace / trade / alliance between states, attitudes towards the player, AI decisions.
-import { FACT, START_WARS, START_ALLIES, START_TRADE, DIPLO, PLAYER } from './data.js';
+import { FACT, START_WARS, START_ALLIES, START_TRADE, DIPLO, PLAYER, FAITH, faithOf } from './data.js';
 import { G, P, adj, str, addLog } from './state.js';
 import { rand } from './rng.js';
 
@@ -23,6 +23,7 @@ function setRel(a,b,s){G.rel[key(a,b)]=s;G.relSince[key(a,b)]=G.turn}
 export function alive(f){return G.prov.some(p=>p.owner===f)}
 export function borders(a,b){return G.prov.some(p=>p.owner===a&&adj(p.id).some(x=>P(x).owner===b))}
 export function power(f){let s=0;for(const p of G.prov)if(p.owner===f)s+=str(p.army)+8;return s}
+export function sameFaith(a,b){return faithOf(a)===faithOf(b)}
 export function warsOf(f){return Object.keys(FACT).filter(x=>x!==f&&x!=='rebel'&&alive(x)&&atWar(f,x))}
 
 export function declareWar(a,b){
@@ -65,8 +66,8 @@ export function proposal(f,kind){
   if(r==='war')return [false,'Сначала нужен мир.'];
   if(r==='ally')return [false,'Вы уже союзники.'];
   const common=warsOf(PLAYER).some(x=>atWar(f,x));
-  const score=a+(common?30:0)+2*since(PLAYER,f)-35;
-  return score>0?[true,'']:[false,'Мало доверия. Нужны торговля, годы мира или общий враг.'];
+  const score=a+(common?30:0)+2*since(PLAYER,f)-35+(sameFaith(PLAYER,f)?FAITH.allySame:FAITH.allyOther);
+  return score>0?[true,'']:[false,'Мало доверия. Нужны торговля, годы мира или общий враг'+(sameFaith(PLAYER,f)?'.':' — а ещё вы разной веры.')];
  }
  return [false,''];
 }
@@ -86,6 +87,7 @@ export function aiDiplomacy(){
  for(const f of fs){if(f===PLAYER)continue;const r=rel(PLAYER,f);
   let a=G.att[f]||0;
   a+=r==='ally'?4:r==='trade'?2:r==='war'?-1:0;
+  a+=sameFaith(PLAYER,f)?FAITH.attSame:FAITH.attOther;
   if(borders(f,PLAYER)&&power(PLAYER)>2*power(f))a-=2;   // fear of a mighty neighbour
   a+=a>0?-0.5:a<0?0.5:0;
   G.att[f]=Math.max(-100,Math.min(100,a));
@@ -106,8 +108,9 @@ export function aiDiplomacy(){
     // a much stronger neighbour may start a war; the player is attacked only if they are disliked
     const ratio=pa/Math.max(1,pb);
     const mood=b===PLAYER?(G.att[a]||0)<-10:true;
-    if(ratio>1.6&&mood&&warsOf(a).length<2&&rand()<DIPLO.warChance*(r==='trade'?0.4:1))declareWar(a,b);
-    else if(r==='peace'&&b!==PLAYER&&rand()<0.04)setRel(a,b,'trade');
+    const fm=sameFaith(a,b)?FAITH.warSame:FAITH.warOther;
+    if(ratio>1.6&&mood&&warsOf(a).length<2&&rand()<DIPLO.warChance*fm*(r==='trade'?0.4:1))declareWar(a,b);
+    else if(r==='peace'&&b!==PLAYER&&rand()<(sameFaith(a,b)?0.05:0.02))setRel(a,b,'trade');
    }
   }
  }
