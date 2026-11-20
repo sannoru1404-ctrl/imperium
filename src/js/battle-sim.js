@@ -302,7 +302,7 @@ export function simStep(dt){
     else{moveTo(r,0,B.siege.W+B.siege.defSign*8,dt);r.state='move'}
    }
    if(r.order&&r.order.type==='move'){
-    if(contact&&cd<CONTACT*0.85){tg=contact;r.order=null}
+    if(contact&&cd<CONTACT*0.85&&!r.resting){tg=contact;r.order=null}
     else if(moveTo(r,r.order.x,r.order.z,dt)){r.order=null;r.state='idle';r.chargeT=0}
     else{r.state='move';r.chargeT+=dt}
    }
@@ -353,7 +353,7 @@ export function simStep(dt){
  if(B.siege)for(const r of al){ // nobody walks through the wall except by gate or ladder
   if(wallSide(r.z)!==r.ws&&!r.passed&&!(B.siege.open&&Math.abs(r.x)<6))r.z=B.siege.W+r.ws*2.5;
  }
- B.aiT-=dt;if(B.aiT<=0){B.aiT=0.6;aiThink()}
+ B.aiT-=dt;if(B.aiT<=0){B.aiT=0.6;aiThink('e',B.aiE||AI_SMART)}
  const act=s=>B.regs.some(r=>r.side===s&&alive(r)&&!r.routing);
  if(!act('e'))finishBattle('p');else if(!act('p'))finishBattle('e');
  else if(B.time>480)finishBattle(B.playerSide==='def'?'p':'e');
@@ -404,28 +404,68 @@ function siegeAI(mine,foes){
   }
  }
 }
-// ---------- enemy AI ----------
-export function aiThink(){
- const mine=B.regs.filter(r=>r.side==='e'&&alive(r)&&!r.routing),foes=B.regs.filter(r=>r.side==='p'&&alive(r)&&!r.routing);
- if(!foes.length)return;
- if(B.siege){siegeAI(mine,foes);return}
+// the AI uses its regiments' abilities
+function aiAbilities(r,mine,foes,side){
+   const tg=r.order&&r.order.type==='attack'?r.order.tg:null;
+   if(r.ab.charge&&tg&&r.state==='move'&&rdist(r,tg)<26&&rdist(r,tg)>CONTACT+2&&!(r.cav&&(UT[tg.t].antiCav||tg.form==='wall')&&frontal(tg,r)>0.35))useAbility(r,'charge');
+   if(r.ab.hold&&((r.state==='fight'&&(r.morale<45||foes.some(f=>f.cav&&rdist(f,r)<CONTACT+2)))||(!r.reserve&&foes.some(f=>f.cav&&f.state==='move'&&rdist(f,r)<14&&frontal(r,f)>0.3))))useAbility(r,'hold');
+   if(r.ab.volley&&r.ranged&&r.state==='aim'&&r.ammo>2)useAbility(r,'volley');
+   if(r.ab.rally&&mine.filter(o=>rdist(o,r)<AURA_R*1.5&&o.morale<30&&o!==r).length+B.regs.filter(o=>o.side===side&&o.routing&&!o.fled&&rdist(o,r)<AURA_R*1.5).length>=2)useAbility(r,'rally');
+  }
+// ---------- battle AI ----------
+// smart: reserve, flanking, rotating tired regiments, abilities (the old AI ran with all of them off)
+export const AI_SMART={reserve:true,flank:true,rotate:true,abil:true};
+export function aiThink(side='e',smart=AI_SMART){
+ const fs=side==='e'?'p':'e';
+ const mine=B.regs.filter(r=>r.side===side&&alive(r)&&!r.routing),foes=B.regs.filter(r=>r.side===fs&&alive(r)&&!r.routing);
+ if(!foes.length||!mine.length)return;
+ if(B.siege){if(side==='e'){siegeAI(mine,foes);if(smart.abil)for(const r of mine)aiAbilities(r,mine,foes,side)}return}
+ const defending=(side==='e')===(B.playerSide==='att');
  const near=foes.some(f=>mine.some(m=>rdist(f,m)<45));
- const hold=B.playerSide==='att'&&B.time<40&&!near;   // defenders wait on their line
+ const hold=defending&&B.time<40&&!near;   // defenders wait on their line
+ const back=side==='e'?-1:1;                 // direction towards our own rear (z)
  const targeted=new Map();
  for(const r of mine)if(r.order&&r.order.type==='attack')targeted.set(r.order.tg,(targeted.get(r.order.tg)||0)+1);
- const center=(()=>{const a=mine.filter(m=>!m.gen);if(!a.length)return null;return{x:a.reduce((s,m)=>s+m.x,0)/a.length,z:a.reduce((s,m)=>s+m.z,0)/a.length}})();
+ const line=mine.filter(m=>!m.gen&&!m.reserve);
+ const center=(()=>{const a=line.length?line:mine.filter(m=>!m.gen);if(!a.length)return null;return{x:a.reduce((s,m)=>s+m.x,0)/a.length,z:a.reduce((s,m)=>s+m.z,0)/a.length}})();
+ // ---- reserve: a quarter of the melee foot waits behind the line, then goes where the line bends
+ if(smart.reserve){
+  if(!B.resInit)B.resInit={};
+  if(!B.resInit[side]){B.resInit[side]=true;
+   const foot=mine.filter(r=>!r.gen&&!r.ranged&&!r.cav);
+   if(mine.length>=6&&foot.length>=3)foot.sort((a,b)=>Math.abs(a.x)-Math.abs(b.x)).slice(0,Math.max(1,Math.floor(foot.length/4))).forEach(r=>{r.reserve=true;r.order={type:'move',x:r.x,z:r.z+back*16}})}
+  const weak=mine.find(r=>r.state==='fight'&&!r.reserve&&(r.morale<45||r.men<r.start*0.45));
+  const late=B.time>90||mine.filter(r=>!r.reserve).length<foes.length*0.6;
+  for(const r of mine)if(r.reserve&&(weak||late||foes.some(f=>rdist(f,r)<14))){
+   r.reserve=false;
+   const tg=weak?(foes.filter(f=>rdist(f,weak)<CONTACT*1.6).sort((a,b)=>rdist(a,r)-rdist(b,r))[0]):null;
+   if(tg)r.order={type:'attack',tg};else r.order=null;
+  }
+ }
  for(const r of mine){
   // formations
   const enemyCavNear=foes.some(f=>f.cav&&rdist(f,r)<35);
   if(canForm(r,'wedge'))r.form='wedge';
-  else if(canForm(r,'wall'))r.form=(hold||(enemyCavNear&&r.state!=='move'))?'wall':'line';
+  else if(canForm(r,'wall'))r.form=(hold||r.reserve||(enemyCavNear&&r.state!=='move'))?'wall':'line';
   else if(canForm(r,'loose'))r.form=foes.some(f=>f.ranged&&rdist(f,r)<f.range+10)?'loose':'line';
+  if(smart.abil)aiAbilities(r,mine,foes,side);
+  if(r.reserve)continue;
+  // ---- rotation: a spent regiment steps back when someone can take its place
+  if(smart.rotate&&!r.gen&&!r.ranged){
+   if(r.resting){if(r.stam>65&&r.morale>60)r.resting=false;else continue}
+   if(r.state==='fight'&&r.stam<10&&r.morale<35&&r.men>r.start*0.25){
+    const fresh=mine.filter(o=>o!==r&&!o.gen&&!o.ranged&&o.stam>60&&o.state!=='fight'&&!o.resting&&rdist(o,r)<25).sort((a,b)=>rdist(a,r)-rdist(b,r))[0];
+    const foe=foes.filter(f=>rdist(f,r)<CONTACT+1)[0];
+    if(fresh&&foe){fresh.reserve=false;fresh.order={type:'attack',tg:foe};r.resting=true;r.order={type:'move',x:r.x,z:r.z+back*22};continue}
+   }
+  }
+  if(abOn(r,'hold'))continue;
   if(r.state==='fight'&&!r.ranged)continue;
   if(r.gen){
    // the general stays behind the line and joins where a fight can be won
    const fight=foes.filter(f=>f.state==='fight'&&rdist(f,r)<45).sort((a,b)=>a.morale-b.morale)[0];
    if(fight&&r.men>40){r.order={type:'attack',tg:fight};continue}
-   if(center){r.order={type:'move',x:center.x,z:center.z-14};continue}
+   if(center){r.order={type:'move',x:center.x,z:center.z+back*14};continue}
   }
   if(r.ranged){
    if(r.order&&r.order.type==='move'&&Math.hypot(r.order.x-r.x,r.order.z-r.z)>1)continue;
@@ -434,6 +474,20 @@ export function aiThink(){
    r.order=n?{type:'attack',tg:n}:null;continue;
   }
   if(hold){r.order=null;continue}
+  // ---- flanking: horsemen ride round an engaged enemy instead of hitting its front
+  // only when the prey is pinned by our foot, close, and nothing juicier (archers, a fleeing enemy) is around
+  if(smart.flank&&r.cav&&!r.flankTg&&r.state!=='fight'&&!foes.some(f=>f.ranged&&!f.cav&&rdist(f,r)<40)){
+   const prey=foes.filter(f=>f.state==='fight'&&!f.cav&&rdist(f,r)<35&&frontal(f,r)>0.35&&mine.some(m=>m!==r&&!m.cav&&m.state==='fight'&&rdist(m,f)<CONTACT+1)).sort((a,b)=>rdist(a,r)-rdist(b,r))[0];
+   if(prey){
+    const [fx,fz]=fwd(prey),px=-fz,pz=fx,sgn=(r.x-prey.x)*px+(r.z-prey.z)*pz>=0?1:-1;
+    r.flankTg=prey;r.flankT=B.time;r.order={type:'move',x:clamp(prey.x+px*sgn*11-fx*6,-95,95),z:clamp(prey.z+pz*sgn*11-fz*6,-FIELD-20,FIELD+20)};continue}
+  }
+  if(r.flankTg){
+   const p=r.flankTg;
+   const done=!alive(p)||p.routing||!(r.order&&r.order.type==='move')||rdist(r,p)<10||frontal(p,r)<0.2||B.time-r.flankT>7;
+   if(done){r.flankTg=null;if(alive(p)&&!p.routing){r.order={type:'attack',tg:p};continue}}
+   else continue;
+  }
   const cur=r.order&&r.order.type==='attack'&&alive(r.order.tg)&&!r.order.tg.routing?r.order.tg:null;
   let best=null,bs=-1e9;
   for(const f of foes){let s=-rdist(r,f);
