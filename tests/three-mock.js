@@ -12,8 +12,8 @@ class Mesh extends O3{constructor(g,m){super();this.geometry=g;this.material=m}}
 class IM extends Mesh{constructor(g,m,c){super(g,m);this.cap=c;this.count=c;this.instanceMatrix={setUsage(){},needsUpdate:false};this.instanceColor=null}
  setMatrixAt(i){if(i>=this.cap||i<0)throw Error('instance overflow '+i+'/'+this.cap)}setColorAt(i){if(i>=this.cap)throw Error('color overflow');this.instanceColor=this.instanceColor||{}}}
 const mkEl=()=>{const L={};return{style:{},L,addEventListener:(k,f)=>L[k]=f,setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:400,height:700}),remove(){}}};
-global.THREE={Vector3:V3,Vector2:V2,Color,BufferAttribute:BA,BufferGeometry,BoxGeometry:BG,SphereGeometry:BG,CylinderGeometry:BG,ConeGeometry:BG,RingGeometry:BG,PlaneGeometry,
+globalThis.THREE={Vector3:V3,Vector2:V2,Color,BufferAttribute:BA,BufferGeometry,BoxGeometry:BG,SphereGeometry:BG,CylinderGeometry:BG,ConeGeometry:BG,RingGeometry:BG,PlaneGeometry,
  MeshLambertMaterial:Mat,MeshBasicMaterial:Mat,SpriteMaterial:Mat,Mesh,InstancedMesh:IM,Sprite:class extends O3{constructor(m){super();this.material=m}},Object3D:O3,Scene:O3,
  Fog:class{},HemisphereLight:O3,DirectionalLight:O3,PerspectiveCamera:class extends O3{updateProjectionMatrix(){}},CanvasTexture:class{dispose(){}},
- WebGLRenderer:class{constructor(){this.domElement=mkEl();global.CANVAS=this.domElement}getContext(){return{}}setPixelRatio(){}setSize(){}render(){}dispose(){}forceContextLoss(){}},
+ WebGLRenderer:class{constructor(){this.domElement=mkEl();globalThis.CANVAS=this.domElement}getContext(){return{}}setPixelRatio(){}setSize(){}render(){}dispose(){}forceContextLoss(){}},
  Raycaster:class{constructor(){this.ray={intersectPlane:(p,t)=>t.set(10,0,5)}}setFromCamera(){}},Plane:class{},DynamicDrawUsage:1,DoubleSide:2};

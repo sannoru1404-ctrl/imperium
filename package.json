@@ -1,0 +1,9 @@
+{
+  "name": "imperium",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "sh tests/run-all.sh",
+    "serve": "python3 -m http.server 8080 --directory src"
+  }
+}
