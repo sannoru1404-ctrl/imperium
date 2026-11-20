@@ -16,7 +16,7 @@ async function playerBot() {
   const R = await import('../src/js/rules.js');
   // economy: research, a decree when rich, one building per year in the capital or a big town
   if (!G.fac[PLAYER].res) { const t = Object.keys((await import('../src/js/data.js')).TECH).find(id => R.techAvailable(PLAYER, id)); if (t) R.setResearch(PLAYER, t); }
-  if (R.edictOf(PLAYER) === 'none' && G.fac[PLAYER].gold > 1500) R.setEdict(PLAYER, 'trade');
+  for (const pv of R.fullProvinces(PLAYER)) if (R.provEdict(pv) === 'none' && G.fac[PLAYER].gold > 1500) R.setEdict(PLAYER, pv, 'trade');
   for (const p of G.prov.filter(p => p.owner === PLAYER && !p.cons)) {
     for (const b of ['barracks', 'farm', 'market', 'church', 'range', 'stable']) { const o = R.buildOptions(p).find(x => x.b === b); if (o && o.ok && G.fac[PLAYER].gold - o.cost > 900) { R.startBuild(p, b); break; } }
   }

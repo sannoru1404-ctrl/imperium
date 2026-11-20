@@ -184,3 +184,86 @@ export const REGIONS = [
   ['paler','Палермо',37.8,13.6,'sic',3],['bari','Апулия',41.0,16.4,'sic',2],['cosen','Калабрия',39.0,16.3,'sic',1],['capua','Капуя',41.1,14.4,'sic',2],
   ['rome','Рим',41.9,12.6,'rebel',3],['sardi','Сардиния',40.0,9.0,'rebel',1],['corsi','Корсика',42.15,9.1,'rebel',1],
 ];
+
+// Provinces: [id, name, [region ids]]. The first region is the provincial capital.
+// Every region belongs to exactly one province (checked by build-map.mjs).
+export const PROVINCES = [
+  // Rus and the steppe
+  ['p_kiev','Киевская земля',['kiev','pereya','turov']],
+  ['p_volyn','Волынь и Галич',['vladv','galich','peremy']],
+  ['p_chern','Черниговская земля',['chern','nsev']],
+  ['p_polot','Кривичи и Литва',['polot','minsk','smol','lith']],
+  ['p_novg','Новгородская земля',['novg','pskov','ladoga']],
+  ['p_zales','Залесье',['rostov','suzdal','murom','ryaz']],
+  ['p_steppe','Дикое поле',['cum1','cum2','cum3']],
+  ['p_taur','Таврика',['chers','tmut']],
+  // Poland and the Baltic
+  ['p_lpol','Малая Польша',['krak','sand','wroc']],
+  ['p_gpol','Великая Польша',['pozn','plock']],
+  ['p_pomor','Поморье и Пруссия',['gdan','szcz','pruss']],
+  ['p_livon','Ливония',['livon','cour','estl']],
+  ['p_finn','Финляндия',['tavas','karel']],
+  // Scandinavia
+  ['p_svea','Свеаланд',['upps','visby']],
+  ['p_gota','Гёталанд',['skara','kalmar']],
+  ['p_norw','Норвегия',['nidar','berg','oslo']],
+  ['p_dan','Дания',['rosk','lund','vibo','schl']],
+  // Holy Roman Empire and Italy
+  ['p_sax','Саксония',['gosl','hamb','magd','meiss']],
+  ['p_rhine','Рейнские земли',['koln','mainz']],
+  ['p_low','Нижние земли',['brug','utre']],
+  ['p_swab','Франкония и Швабия',['nurn','strass']],
+  ['p_bav','Бавария',['regen','wien','karn']],
+  ['p_burg','Бургундия',['lyon','dijon']],
+  ['p_boh','Богемия',['prag','olom']],
+  ['p_lomb','Ломбардия',['milan','genoa']],
+  ['p_ven','Венето',['venic','veron']],
+  ['p_rome','Рим и Тоскана',['rome','flor']],
+  ['p_sard','Сардиния и Корсика',['sardi','corsi']],
+  ['p_sic','Сицилия',['paler','cosen']],
+  ['p_apul','Апулия',['capua','bari']],
+  // Hungary and the Balkans
+  ['p_hun','Венгрия',['eszt','nitra','pecs']],
+  ['p_trans','Затисье',['bihar','trans','szeg']],
+  ['p_cro','Хорватия',['split','zagr']],
+  ['p_serb','Сербия',['ras','dukl','bosn']],
+  // Byzantium
+  ['p_thrac','Фракия',['const','adri']],
+  ['p_bulg','Болгария',['presl','doros','sofia']],
+  ['p_maced','Македония',['thess','dyrr']],
+  ['p_hell','Эллада',['athen','pelop']],
+  ['p_asia','Вифиния',['nicae','smyr']],
+  ['p_anat','Анатолия',['konya','attal','kays','ankar']],
+  ['p_crete','Крит',['crete']],
+  ['p_cypr','Кипр',['cypr']],
+  // The East
+  ['p_antio','Антиохия',['antio','tarsu']],
+  ['p_edess','Эдесса',['edess','melit']],
+  ['p_syria','Сирия',['damas','alepp','tripl']],
+  ['p_pales','Палестина',['jerus','ascal']],
+  ['p_egypt','Египет',['cairo','alex','barca']],
+  ['p_iraq','Ирак',['bagh','mosul']],
+  ['p_cauc','Кавказ',['georg','alan']],
+  ['p_armen','Армения и Понт',['trebi','armen']],
+  // Africa
+  ['p_ifri','Ифрикия',['mahd','tripo']],
+  ['p_magh','Магриб',['marr','fes','tlem','beja']],
+  // Iberia
+  ['p_andal','Андалусия',['sevil','cord','grana','badaj']],
+  ['p_leon','Леон',['leon','comps','coimb']],
+  ['p_cast','Кастилия',['toled','burgo']],
+  ['p_arag','Арагон',['zarag','pampl']],
+  ['p_catal','Каталония',['barce','valen','balea']],
+  // France
+  ['p_franc','Иль-де-Франс',['paris','troye']],
+  ['p_loire','Долина Луары',['orlea','anjou']],
+  ['p_norm','Нормандия и Бретань',['rouen','bret']],
+  ['p_aquit','Аквитания',['bord','poit','auver']],
+  ['p_langd','Лангедок',['toul','arles']],
+  // British Isles
+  ['p_engl','Англия',['lond','winch']],
+  ['p_north','Нортумбрия',['york','linc']],
+  ['p_march','Валлийская марка',['chest','wales']],
+  ['p_scot','Шотландия',['edinb','inver']],
+  ['p_irel','Ирландия',['dubl','galw','cork']],
+];

@@ -1,10 +1,10 @@
-import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER } from './data.js';
+import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS } from './data.js';
 import * as D from './diplo.js';
-import { income, orderOf, generals, maxGenerals, edictOf, setEdict, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
+import { income, orderOf, generals, maxGenerals, provEdict, setEdict, ownsProvince, fullProvinces, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
 const PLAYER_=()=>PLAYER;
 import { PROV_DEF } from './data.js';
 import { $ } from './util.js';
-import { G, addLog, SLOTS, readSlot, saveSlot, loadSlot, newGame } from './state.js';
+import { G, P, addLog, SLOTS, readSlot, saveSlot, loadSlot, newGame } from './state.js';
 import { render } from './map.js';
 
 // ===================== UI HELPERS =====================
@@ -26,7 +26,8 @@ export function showHelp(){modal(`<h2>Как играть</h2>
 <p><b>Карта:</b> двигай пальцем, двумя пальцами — масштаб (или кнопки ＋ ／ − ／ ◎). Нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
 <p><b>Казна и постройки:</b> земли приносят золото, войска стоят содержания. В каждой земле есть места под постройки: казармы, стрельбища и конюшни открывают отряды, пашни и торг дают доход, храм — порядок, стены — защиту. Город выше уровнем — больше мест и найма.</p>
 <p><b>Порядок:</b> падает в захваченных и чужих по культуре землях и от податей. Если долго ниже нуля — бунт. Помогают войско в земле, храм и указ «Правда и покой».</p>
-<p><b>Держава (☰):</b> указ на всю страну, знания (технологии), послы: мир, торговля, союз, война. Нападать можно только на тех, с кем война, и на вольные земли.</p>
+<p><b>Провинции:</b> земли объединены в провинции по 2–4 (толстые границы на карте). Возьми провинцию целиком — доход +15%, порядок +5 и можно издать в ней указ. Столица провинции успокаивает остальные её земли.</p>
+<p><b>Держава (☰):</b> провинции и указы, знания (технологии), послы: мир, торговля, союз, война. Нападать можно только на тех, с кем война, и на вольные земли.</p>
 <p><b>Воевода:</b> один на войско. Рядом с ним полки стойче и быстрее приходят в себя. Если он погибнет или побежит — всё войско дрогнет.</p>
 <p><b>Опыт и черты:</b> выжившие в боях отряды получают звёзды ★ (до трёх): каждая прибавляет атаку, защиту и дух. Воеводы растут в чине и получают черты: стратег, храбрец, мастер осад, быстрый, хозяйственный (бывает и трус).</p>
 <p><b>Подкрепления:</b> войско с воеводой в соседней земле само вступает в бой — и твоё, и вражеское. После боя оно возвращается домой.</p>
@@ -78,14 +79,14 @@ let REALM_TAB='sum';
 export function showRealm(tab){
  if(tab)REALM_TAB=tab;
  const f=PLAYER_(),F=G.fac[f],inc=income(f);
- const tabs=[['sum','📊 Держава'],['diplo','🤝 Послы'],['edict','📜 Указ'],['tech','🔬 Знания']].map(([k,n])=>`<button class="${REALM_TAB===k?'on':''}" onclick="showRealm('${k}')">${n}</button>`).join('');
+ const tabs=[['sum','📊 Держава'],['diplo','🤝 Послы'],['edict','🗺 Провинции'],['tech','🔬 Знания']].map(([k,n])=>`<button class="${REALM_TAB===k?'on':''}" onclick="showRealm('${k}')">${n}</button>`).join('');
  let body='';
  if(REALM_TAB==='sum'){
   const own=G.prov.filter(p=>p.owner===f);
   const low=own.filter(p=>orderOf(p)<0);
   body=`<p>Земель: <b>${own.length}</b> из ${WIN_N} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
   <p>Доход: <b>+${inc.inc}</b> · Содержание войск: <b>−${inc.up}</b> · Итого: <b style="color:${inc.net>=0?'#7bc96f':'#e57373'}">${inc.net>=0?'+':''}${inc.net}</b> в год</p>
-  <p>Указ: <b>${EDICTS[edictOf(f)].n}</b> · Изучается: <b>${F.res?TECH[F.res.id].n+` (${F.res.pts}/${TECH[F.res.id].cost})`:'ничего'}</b> (+${researchPoints(f)} в год)</p>
+  <p>Провинций целиком: <b>${fullProvinces(f).length}</b> · указов: <b>${fullProvinces(f).filter(pv=>provEdict(pv)!=='none').length}</b> · Изучается: <b>${F.res?TECH[F.res.id].n+` (${F.res.pts}/${TECH[F.res.id].cost})`:'ничего'}</b> (+${researchPoints(f)} в год)</p>
   ${low.length?`<p style="color:#e57373">Неспокойно: ${low.map(p=>p.n).join(', ')}. Поставь войско, храм или указ «Правда и покой».</p>`:'<p class="small">Во всех землях спокойно.</p>'}
   <div class="row" style="margin-top:10px"><button onclick="showSaves()">💾 Сохранения</button><button onclick="showHelp()">? Как играть</button></div>`;
  } else if(REALM_TAB==='diplo'){
@@ -99,8 +100,14 @@ export function showRealm(tab){
     <div class="small">${D.REL_I[r]} ${D.REL_N[r]}${D.borders(f,x)?' · сосед':''} · отношение <span style="color:${a>=20?'#7bc96f':a>=-10?'#e0b34a':'#e57373'}">${a>0?'+':''}${a}</span> · сила ${Math.round(D.power(x))}</div></div>
     <div class="row" style="gap:4px">${acts}</div></div>`}).join('');
  } else if(REALM_TAB==='edict'){
-  body=`<p class="small">Действует один указ на всю державу. Смена стоит ${EDICT_COST} золота.</p>`+Object.keys(EDICTS).map(e=>{const E=EDICTS[e],on=edictOf(f)===e;
-   return `<div class="rec"><div>${E.i} <b>${E.n}</b><div class="small">${E.d}</div></div><button class="${on?'pri':''}" onclick="pickEdict('${e}')" ${on||(e!=='none'&&F.gold<EDICT_COST)?'disabled':''}>${on?'действует':'принять'}</button></div>`}).join('');
+  const mine=Object.values(PROVINCES).filter(pv=>pv.regs.some(id=>P(id).owner===f));
+  const full=mine.filter(pv=>ownsProvince(f,pv.id)),part=mine.filter(pv=>!ownsProvince(f,pv.id));
+  body=`<p class="small">Вся провинция в твоих руках — доход +${Math.round(PROVINCE_BONUS.inc*100)}% и порядок +${PROVINCE_BONUS.order} в каждой её земле, и можно издать указ. Столица провинции даёт +${PROVINCE_BONUS.seatOrder} порядка остальным твоим землям в ней. Смена указа стоит ${EDICT_COST} золота.</p>`+
+  full.map(pv=>{const cur=provEdict(pv.id);
+   return `<div class="rec" style="flex-wrap:wrap"><div style="min-width:150px;flex:1"><b>${pv.n}</b> <span class="small">✔ вся · ${pv.regs.map(id=>P(id).n).join(', ')}</span><div class="small">Указ: ${EDICTS[cur].i} <b>${EDICTS[cur].n}</b>${cur!=='none'?' — '+EDICTS[cur].d:''}</div></div>
+    <div class="row" style="gap:4px">${Object.keys(EDICTS).filter(e=>e!==cur).map(e=>`<button title="${EDICTS[e].d}" onclick="pickEdict('${pv.id}','${e}')" ${e!=='none'&&F.gold<EDICT_COST?'disabled':''}>${EDICTS[e].i} ${EDICTS[e].n}</button>`).join('')}</div></div>`}).join('')+
+  (part.length?`<h3 style="margin:10px 0 4px;font-size:15px">Не хватает земель</h3>`+part.map(pv=>{const have=pv.regs.filter(id=>P(id).owner===f);
+   return `<div class="rec"><div><b>${pv.n}</b> <span class="small">${have.length}/${pv.regs.length}</span><div class="small">Нужно ещё: ${pv.regs.filter(id=>P(id).owner!==f||P(id).occ>0).map(id=>P(id).n+(P(id).owner===f?' (оккупация)':'')).join(', ')}</div></div></div>`}).join(''):'');
  } else {
   body=`<p class="small">Очки знаний: +${researchPoints(f)} в год (больше земель и храмов — быстрее).</p>`+['mil','civ'].map(br=>`<h3 style="margin:10px 0 4px;font-size:15px">${br==='mil'?'⚔ Военное дело':'🏛 Устройство державы'}</h3>`+
    Object.keys(TECH).filter(id=>TECH[id].br===br).map(id=>{const T=TECH[id],done=hasTech(f,id),cur=F.res&&F.res.id===id,can=techAvailable(f,id);
@@ -109,7 +116,7 @@ export function showRealm(tab){
  }
  modal(`<h2>${FACT[f].emblem} ${FACT[f].n}</h2><div class="tabs">${tabs}</div>${body}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Закрыть</button></div>`);
 }
-export function pickEdict(e){if(setEdict(PLAYER_(),e)){addLog(`Новый указ: ${EDICTS[e].n}.`);render()}showRealm('edict')}
+export function pickEdict(pv,e){if(setEdict(PLAYER_(),pv,e)){addLog(`${PROVINCES[pv].n}: указ — ${EDICTS[e].n}.`);render()}showRealm('edict')}
 export function pickTech(id){setResearch(PLAYER_(),id);showRealm('tech')}
 
 export async function diplo(x,kind){

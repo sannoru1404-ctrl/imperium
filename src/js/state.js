@@ -34,7 +34,8 @@ export function newGame(gameSeed,faction){
   return p.tier>=3?{barracks:1,market:1,walls:1}:p.tier===2?{barracks:1,farm:1}:{farm:1}};
  G.prov.forEach(p=>{if(p.owner!=='rebel')p.cult0=FACT[p.owner].cult});
  G.prov.forEach(p=>{if(p.owner==='rebel'){let best=null,bd=1e9;for(const q of G.prov)if(q.owner!=='rebel'){const d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;best=q}}p.cult0=best?best.cult0:'west'}});
- for(const f in G.fac){G.fac[f].tech={};G.fac[f].edict='none';G.fac[f].res=null}
+ for(const f in G.fac){G.fac[f].tech={};G.fac[f].res=null}
+ G.pe={};   // provincial decrees: {province: {f, e}}
  G.prov.forEach(p=>{
   const cap=capOf(p.owner)===p.id;
   p.b=start(p,cap);p.cons=null;p.unrest=0;
@@ -48,7 +49,7 @@ export function newGame(gameSeed,faction){
  render(true);
 }
 // ---------- saves: 3 manual slots + autosave, versioned ----------
-export const SAVE_VER=4; // v4: generals, veterans, stances, events (older saves are not compatible)
+export const SAVE_VER=5; // v5: provinces and provincial decrees (older saves are not compatible)
 export const SLOTS=['auto','1','2','3'];
 const key=slot=>'imperium_v'+SAVE_VER+'_'+slot;
 export function saveSlot(slot='auto'){

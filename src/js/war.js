@@ -132,7 +132,7 @@ export function runEvents(){
    p.army=i<ev.armies?ev.army.map(t=>mk(t)):[];
    p.army.forEach(u=>makeGeneral(u,f));
   });
-  if(!G.fac[f])G.fac[f]={gold:0,tech:{},edict:'none',res:null};
+  if(!G.fac[f])G.fac[f]={gold:0,tech:{},res:null};
   G.fac[f].cap=lands[0].id;G.fac[f].gold=(G.fac[f].gold||0)+3000;
   // the newcomers know their trade
   G.fac[f].tech={mil1:1,mil2:1,mil3:1};

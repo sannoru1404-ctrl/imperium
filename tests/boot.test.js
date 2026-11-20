@@ -7,7 +7,8 @@ globalThis.newGame();
 console.log('boot: ok (main.js loads, globals exposed, new game starts)');
 // open every new dialog once
 globalThis.showRealm('sum'); globalThis.showRealm('edict'); globalThis.showRealm('tech');
-globalThis.pickTech('mil1'); globalThis.pickEdict('tax');
+globalThis.pickTech('mil1'); globalThis.pickEdict('p_kiev', 'tax');
+if ((await import('../src/js/rules.js')).provEdict('p_kiev') !== 'tax') throw new Error('provincial decree not set');
 globalThis.tapProv('kiev'); globalThis.setTab('build'); globalThis.openBuild(); globalThis.doBuild('market'); globalThis.setTab('army');
 const st = await import('../src/js/state.js');
 if (!st.P('kiev').cons) throw new Error('construction did not start');

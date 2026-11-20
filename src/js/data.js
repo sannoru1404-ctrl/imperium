@@ -1,6 +1,6 @@
 // ===================== DATA =====================
 // Grand campaign: Europe c. 1100. All balance numbers live here. Geography is in mapdata.js (generated).
-import { REGION_DEF, ADJ_DEF } from './mapdata.js';
+import { REGION_DEF, ADJ_DEF, PROVINCE_DEF } from './mapdata.js';
 
 export const START_YEAR=1100;
 // The player's faction is chosen at the start of a game.
@@ -85,6 +85,12 @@ export const RECRUIT=new Proxy({},{get:(_,f)=>f==='rebel'?['mil','spear','arch']
 export const TIER_INCOME={1:90,2:140,3:200};
 export const PROV_DEF=REGION_DEF.map(([id,n,x,y,owner,tier])=>[id,n,x,y,owner,TIER_INCOME[tier],tier]);
 export const ADJ=ADJ_DEF;
+// Provinces: groups of 2–4 regions; the first region is the provincial capital.
+export const PROVINCES=Object.fromEntries(PROVINCE_DEF.map(([id,n,rs])=>[id,{id,n,regs:rs,cap:rs[0]}]));
+export const PROV_OF=Object.fromEntries(PROVINCE_DEF.flatMap(([id,,rs])=>rs.map(r=>[r,id])));
+// whole province held: income and order bonus in each of its regions; a provincial decree becomes possible.
+// holding the provincial capital: order bonus in your other regions of that province.
+export const PROVINCE_BONUS={inc:0.15,order:5,seatOrder:5};
 
 // Starting forces
 export const START_ARMY={
@@ -100,7 +106,8 @@ export const WIN_N=35;      // regions needed for victory
 export const AI={attackRatio:1.45,majorRatio:1.5,  // AI kingdoms are wary of attacking each other
  playerGraceTurns:8,playerBias:0.9,aggressive:{},
  maxAttacksPerTurn:3,   // each AI faction starts at most this many battles a year
- occupationTurns:2};    // a conquered land pays no taxes for this many years
+ occupationTurns:2,     // a conquered land pays no taxes for this many years
+ provinceBias:1.3};     // AI prefers a target that completes one of its provinces (×1.15 if it only adds to one)
 // Independent lands: garrison size and a small standing force that regrows
 export const REBELS={garBonus:1,armyEvery:4,armyMax:2,unit:['spear','arch','druzh']};
 
@@ -122,13 +129,13 @@ export const UNIT_REQ={spear:['barracks',1],druzh:['barracks',2],arch:['range',1
 export const GEN_UPKEEP=50, UNIT_UPKEEP=25;
 export const MAX_ARMY=12;   // regiments in one army (incl. the general)
 
-// One active decree per state; changing it costs gold.
+// Decrees are issued per province, only while the whole province is held; changing one costs gold.
 export const EDICTS={
  none: {n:'Без указа',i:'—',d:'Ничего не меняется.'},
- tax:  {n:'Подати',i:'💰',d:'Доход +20%, порядок −15 во всех землях.'},
- peace:{n:'Правда и покой',i:'🕊',d:'Порядок +15 во всех землях, доход −5%.'},
- levy: {n:'Ополчение',i:'⚔️',d:'Найм отрядов на 25% дешевле, гарнизоны +1.'},
- trade:{n:'Торговые льготы',i:'⚖️',d:'Торги приносят на 30% больше.'},
+ tax:  {n:'Подати',i:'💰',d:'Доход +20%, порядок −15 в землях провинции.'},
+ peace:{n:'Правда и покой',i:'🕊',d:'Порядок +15 в землях провинции, доход −5%.'},
+ levy: {n:'Ополчение',i:'⚔️',d:'Найм в провинции на 25% дешевле, гарнизоны +1.'},
+ trade:{n:'Торговые льготы',i:'⚖️',d:'Торги в провинции приносят на 30% больше.'},
 };
 export const EDICT_COST=200;
 

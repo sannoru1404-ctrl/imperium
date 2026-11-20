@@ -1,5 +1,5 @@
 // Campaign rules: income, upkeep, public order, buildings, decrees, technologies, generals.
-import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE } from './data.js';
+import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS } from './data.js';
 import { G, P, mk, addLog } from './state.js';
 import { rand } from './rng.js';
 import { tradeIncome } from './diplo.js';
@@ -13,12 +13,26 @@ export function researchPoints(f){
 }
 export function setResearch(f,id){if(techAvailable(f,id))G.fac[f].res={id,pts:(G.fac[f].res&&G.fac[f].res.id===id)?G.fac[f].res.pts:0}}
 
-// ---------- decrees ----------
-export function edictOf(f){return (G.fac[f]&&G.fac[f].edict)||'none'}
-export function setEdict(f,e){
- const F=G.fac[f];if(edictOf(f)===e||!EDICTS[e])return false;
- if(e!=='none'){if(F.gold<EDICT_COST)return false;F.gold-=EDICT_COST}
- F.edict=e;return true;
+// ---------- provinces ----------
+export function provinceOf(id){return PROVINCES[PROV_OF[id]]}
+export function provRegions(pv){return PROVINCES[pv].regs.map(P)}
+// the whole province belongs to f and none of it is freshly occupied
+export function ownsProvince(f,pv){return f!=='rebel'&&PROVINCES[pv].regs.every(id=>{const q=P(id);return q.owner===f&&!(q.occ>0)})}
+export function fullProvinces(f){return Object.keys(PROVINCES).filter(pv=>ownsProvince(f,pv))}
+export function isProvCap(p){return provinceOf(p.id).cap===p.id}
+// holds the provincial capital (and is not the capital itself)
+function holdsSeat(p){const pv=provinceOf(p.id);return pv.cap!==p.id&&P(pv.cap).owner===p.owner}
+
+// ---------- decrees (one per whole province) ----------
+// G.pe[pv]={f,e}: lapses by itself when the province is no longer held whole by f
+export function provEdict(pv){const r=G.pe&&G.pe[pv];return r&&ownsProvince(r.f,pv)?r.e:'none'}
+export function edictAt(p){const pv=PROV_OF[p.id],r=G.pe&&G.pe[pv];return r&&r.f===p.owner&&ownsProvince(r.f,pv)?r.e:'none'}
+export function setEdict(f,pv,e){
+ if(!ownsProvince(f,pv)||!EDICTS[e])return false;
+ G.pe=G.pe||{};const cur=G.pe[pv]&&G.pe[pv].f===f?G.pe[pv].e:'none';
+ if(cur===e)return false;
+ if(e!=='none'){if(G.fac[f].gold<EDICT_COST)return false;G.fac[f].gold-=EDICT_COST}
+ G.pe[pv]={f,e};return true;
 }
 
 // ---------- buildings ----------
@@ -59,7 +73,7 @@ function sumEffect(p,key){let s=0;for(const b in p.b||{})for(let l=1;l<=p.b[b];l
 export function wallLevel(p){let w=0;for(let l=1;l<=bLevel(p,'walls');l++)w=Math.max(w,BUILDINGS.walls.lv[l-1].wall||0);return w}
 export function garMax(p){
  const cap=G.fac[p.owner]&&G.fac[p.owner].cap===p.id;
- return p.lvl+1+(p.owner==='rebel'?REBELS.garBonus:0)+(cap?2:0)+sumEffect(p,'gar')+(edictOf(p.owner)==='levy'?1:0);
+ return p.lvl+1+(p.owner==='rebel'?REBELS.garBonus:0)+(cap?2:0)+sumEffect(p,'gar')+(edictAt(p)==='levy'?1:0);
 }
 
 // ---------- units ----------
@@ -67,7 +81,7 @@ export function unitAvailable(p,t){
  if(!RECRUIT[p.owner].includes(t))return false;
  const r=UNIT_REQ[t];return !r||bLevel(p,r[0])>=r[1];
 }
-export function unitCost(f,t){return Math.round(UT[t].cost*(edictOf(f)==='levy'?0.75:1))}
+export function unitCost(f,t,p){return Math.round(UT[t].cost*(p&&p.owner===f&&edictAt(p)==='levy'?0.75:1))}
 export function generals(f){return G.prov.reduce((s,p)=>s+p.army.filter(u=>UT[u.t].general&&p.owner===f).length,0)}
 // AI states sitting on a big treasury raise an extra army for every 5000 gold
 export function maxGenerals(f){return maxGeneralsFor(G.prov.filter(p=>p.owner===f).length)+(f!==PLAYER?Math.min(3,Math.floor((G.fac[f].gold||0)/5000)):0)}
@@ -80,7 +94,9 @@ export function orderOf(p){
  if(p.cult0&&p.cult0!==FACT[f].cult)o+=ORDER.foreign;
  o+=sumEffect(p,'order');
  o+=Math.min(ORDER.maxGarrison,p.army.length*ORDER.perGarrison);
- const e=edictOf(f);if(e==='tax')o-=15;if(e==='peace')o+=15;
+ const e=edictAt(p);if(e==='tax')o-=15;if(e==='peace')o+=15;
+ if(ownsProvince(f,PROV_OF[p.id]))o+=PROVINCE_BONUS.order;
+ if(holdsSeat(p))o+=PROVINCE_BONUS.seatOrder;
  if(hasTech(f,'civ3'))o+=10;
  if(p.raided>0)o-=10;                 // plundered by raiders
  return Math.max(-100,Math.min(100,o));
@@ -92,11 +108,13 @@ export function provIncome(p){
  const f=p.owner;
  let v=p.base*(1+0.25*(p.lvl-1))*(1+sumEffect(p,'inc'));
  let g=sumEffect(p,'gold');
- if(edictOf(f)==='trade')g*=1.3;
+ const e=edictAt(p);
+ if(e==='trade')g*=1.3;
  if(hasTech(f,'civ2'))g*=1.3;
  v+=g;
  if(hasTech(f,'civ1'))v*=1.1;
- const e=edictOf(f);if(e==='tax')v*=1.2;if(e==='peace')v*=0.95;
+ if(e==='tax')v*=1.2;if(e==='peace')v*=0.95;
+ if(ownsProvince(f,PROV_OF[p.id]))v*=1+PROVINCE_BONUS.inc;
  if(orderOf(p)<ORDER.poorBelow)v*=0.5;
  if(p.raided>0)v*=1-RAID_SHARE;
  return Math.round(v);
@@ -157,11 +175,12 @@ export function yearlyUpdate(){
 const AI_BUILD_ORDER=['barracks','farm','market','range','church','stable','walls'];
 export function aiEconomy(f){
  const F=G.fac[f];
- // decree: taxes while order allows it, otherwise peace
+ // decrees in whole provinces: peace where unrest, taxes when poor, trade otherwise
  const own=G.prov.filter(p=>p.owner===f);
- const unhappy=own.filter(p=>orderOf(p)<0).length;
- const want=unhappy>own.length/4?'peace':F.gold<300?'tax':'trade';
- if(edictOf(f)!==want&&F.gold>EDICT_COST+300&&rand()<0.3)setEdict(f,want);
+ for(const pv of fullProvinces(f)){
+  const want=provRegions(pv).some(p=>orderOf(p)<0)?'peace':F.gold<300?'tax':'trade';
+  if(provEdict(pv)!==want&&F.gold>EDICT_COST+300&&rand()<0.3)setEdict(f,pv,want);
+ }
  // build where useful (a few towns a year), keeping a reserve for the army
  const towns=own.filter(p=>!p.cons).sort((a,b)=>b.tier-a.tier||b.base-a.base);
  let built=0;

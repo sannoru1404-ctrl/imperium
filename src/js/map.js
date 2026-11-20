@@ -1,13 +1,13 @@
 import { FACT, UT, RECRUIT, uname, ADJ, WIN_N, PLAYER, FORMS, START_YEAR, AI, BUILDINGS, UNIT_REQ , MAX_ARMY, SETTLE_COST, UNIT_UPKEEP, GEN_UPKEEP } from './data.js';
-import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS } from './mapdata.js';
+import { MAP_W, MAP_H, SEA_PATH, ISLAND_PATHS, LAKE_PATHS, RIVER_PATHS, CELLS, PROVINCE_BORDERS } from './mapdata.js';
 import { $ } from './util.js';
 import { G, mk, P, adj, isSea, addLog, income, str, garUnits, provIncome, capOf } from './state.js';
 import { checkEnd, autoResolve, siegeMods, siegeOpts, startSiege, hasRam } from './turn.js';
 import { atWar, rel, declareWar, REL_N, REL_I } from './diplo.js';
-import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost } from './rules.js';
+import { orderOf, wallLevel, usedSlots, slots, generals, maxGenerals, buildOptions, startBuild, buildingEffect, unitAvailable, unitCost, provinceOf, ownsProvince, isProvCap, edictAt } from './rules.js';
 import { B, tactical } from './battle-sim.js';
 import { modal, closeModal, ask, toast } from './ui.js';
-import { STANCES, TRAITS } from './data.js';
+import { STANCES, TRAITS, EDICTS, PROVINCE_BONUS } from './data.js';
 import { gatherReinforcements, reinfText, afterBattle, stanceOf, setStanceOf, stanceMods, genLabel, stars, makeGeneral, isGen } from './war.js';
 
 // ===================== MAP RENDER =====================
@@ -30,6 +30,7 @@ function buildStatic(){
  <path d="${SEA_PATH}" fill="#2a5370"/><path d="${SEA_PATH}" fill="url(#wv)" opacity=".55"/>
  <g fill="url(#parch)" stroke="#6d5a38" stroke-width="1.5">${ISLAND_PATHS.map(d=>`<path d="${d}"/>`).join('')}</g>
  <g id="mCells" clip-path="url(#landClip)"></g>
+ <path class="pv-border" d="${PROVINCE_BORDERS}" clip-path="url(#landClip)" fill="none" stroke="#2b1d10" stroke-width="2.6" stroke-opacity=".75" stroke-linecap="round"/>
  <g fill="#2a5370" stroke="#6d5a38" stroke-width="1">${LAKE_PATHS.map(d=>`<path d="${d}"/>`).join('')}</g>
  <g fill="none" stroke="#3f6f8f" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity=".85">${RIVER_PATHS.map(d=>`<path d="${d}"/>`).join('')}</g>
  <path d="${SEA_PATH}" fill="none" stroke="#6d5a38" stroke-width="1.6"/>
@@ -127,6 +128,8 @@ export function drawPanel(){
  const w=wallLevel(p);
  let h=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><span class="h" style="font-size:17px;color:${fc.tc||fc.c};filter:brightness(1.4)">${p.n}</span> <span class="small">· ${fc.n} · ур. ${p.lvl}${w?` · ${w>1?'🏰':'🧱'}`:''}</span></div>
  <div class="small" style="white-space:nowrap">💰${p.occ>0?'0':provIncome(p)} · 🔱${p.gar}${own?' · '+orderBadge(p):''}</div></div>`;
+ {const pv=provinceOf(p.id),n=pv.regs.filter(id=>P(id).owner===p.owner).length,whole=ownsProvince(p.owner,pv.id),e=edictAt(p);
+  h+=`<div class="small" style="margin-top:3px">🗺 <a href="#" style="color:var(--gold)" onclick="event.preventDefault();showRealm('edict')">${pv.n}</a>${isProvCap(p)?' · столица провинции':''} · ${whole?`вся (доход +${Math.round(PROVINCE_BONUS.inc*100)}%, порядок +${PROVINCE_BONUS.order})`:`${n}/${pv.regs.length}`}${e!=='none'?` · ${EDICTS[e].i} ${EDICTS[e].n}`:''}</div>`}
  if(p.siege)h+=`<div class="small" style="color:#e0b34a;margin-top:4px">⛺ Осада: ${FACT[p.siege.f].n}, ${p.siege.turns} г.${p.siege.turns>=1?' · таран готов':''} · сдастся через ${Math.max(0,2+wallLevel(p)-p.siege.turns)} г.</div>`;
  if(own)h+=`<div class="tabs"><button class="${PANEL_TAB==='army'?'on':''}" onclick="setTab('army')">⚔ Войско</button><button class="${PANEL_TAB==='build'?'on':''}" onclick="setTab('build')">🏗 Постройки ${usedSlots(p)}/${slots(p)}</button></div>`;
  if(!own||PANEL_TAB==='army'){
@@ -265,7 +268,7 @@ export function openRecruit(){
  const p=P(G.sel);
  const hasGen=p.army.some(u=>UT[u.t].general),genFull=generals(PLAYER)>=maxGenerals(PLAYER);
  let h='';
- RECRUIT[PLAYER].forEach(t=>{const d=UT[t];const cost=unitCost(PLAYER,t);
+ RECRUIT[PLAYER].forEach(t=>{const d=UT[t];const cost=unitCost(PLAYER,t,p);
   let why='';
   if(d.general&&hasGen)why='есть';else if(d.general&&genFull)why='лимит';
   else if(!unitAvailable(p,t)){const r=UNIT_REQ[t];why=`нужны ${BUILDINGS[r[0]].n.toLowerCase()} ${r[1]}`}
@@ -275,7 +278,7 @@ export function openRecruit(){
  modal(`<h2>Набор: ${p.n}</h2><p class="small">Содержание: ${UNIT_UPKEEP} в год за отряд, ${GEN_UPKEEP} за воеводу. Воевод: ${generals(PLAYER)} из ${maxGenerals(PLAYER)} (растёт с числом земель). Наймов в этом году: ${p.lvl-p.rec}.</p>${h}<div class="row" style="margin-top:12px"><button onclick="closeModal()">Закрыть</button></div>`);
 }
 export function recruit(t){
- const p=P(G.sel),d=UT[t],cost=unitCost(PLAYER,t);
+ const p=P(G.sel),d=UT[t],cost=unitCost(PLAYER,t,p);
  if(G.fac[PLAYER].gold<cost||p.army.length>=MAX_ARMY||p.rec>=p.lvl||!unitAvailable(p,t)&&!d.general&&t!=='mil')return;
  if(d.general&&(p.army.some(u=>UT[u.t].general)||generals(PLAYER)>=maxGenerals(PLAYER)))return;
  G.fac[PLAYER].gold-=cost;p.rec++;const u=mk(t);makeGeneral(u,PLAYER);p.army.push(u);G.pick.add(u.id);

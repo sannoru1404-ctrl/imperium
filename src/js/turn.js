@@ -7,7 +7,7 @@ import { modal, closeModal, ask } from './ui.js';
 import { rand } from './rng.js';
 import { aiDiplomacy, atWar, declareWar, rel } from './diplo.js';
 import { reliefStr, gatherReinforcements, reinfText, afterBattle, stanceMods, stanceOf, aiStances, raids, runEvents, eventSupply, nameGenerals, makeGeneral, EVENT_AGGR, isGen } from './war.js';
-import { yearlyUpdate, garMax, aiEconomy, unitAvailable, unitCost, generals, maxGenerals, wallLevel, hasTech } from './rules.js';
+import { yearlyUpdate, garMax, aiEconomy, unitAvailable, unitCost, generals, maxGenerals, wallLevel, hasTech, provinceOf } from './rules.js';
 
 // ===================== TURN =====================
 export async function endTurn(){
@@ -65,11 +65,11 @@ export async function aiTurn(f){
   const bag=[];pool.forEach(t=>{for(let i=0;i<(w[t]||1);i++)bag.push(t)});
   while(p.army.length<MAX_ARMY&&p.rec<p.lvl){
    const needGen=!hasGen(p)&&border(p)&&generals(f)<maxGenerals(f);
-   const t=needGen&&F.gold>=unitCost(f,'gen')?'gen':bag[Math.floor(rand()*bag.length)];
+   const t=needGen&&F.gold>=unitCost(f,'gen',p)?'gen':bag[Math.floor(rand()*bag.length)];
    if(!t)break;
    const reserve=G.turn<4?0:150;
-   if(F.gold<unitCost(f,t)+reserve||income(f).net<40)break;
-   F.gold-=unitCost(f,t);const u=mk(t);makeGeneral(u,f);p.army.push(u);p.rec++;
+   if(F.gold<unitCost(f,t,p)+reserve||income(f).net<40)break;
+   F.gold-=unitCost(f,t,p);const u=mk(t);makeGeneral(u,f);p.army.push(u);p.rec++;
   }
  }
  // moves
@@ -83,13 +83,17 @@ export async function aiTurn(f){
    continue;
   }
   const s=str(p.army);
-  let best=null,bs=0;
+  let best=null,bs=0,bscore=0;
   adj(p.id).forEach(a=>{const t=P(a);if(t.owner===f)return;
    if(t.owner!=='rebel'&&!atWar(f,t.owner))return;
    const ds=str(t.army)+str(garUnits(t),1.2)+reliefStr(t)+0.1;let r=s/ds;
    if(t.owner===PLAYER){if(G.turn<AI.playerGraceTurns)return;r*=AI.playerBias}
    else if(t.owner!=='rebel')r*=aggr/AI.majorRatio;
-   if(r>bs){bs=r;best=t}});
+   if(r<=aggr)return;
+   // among the targets worth attacking, prefer one that rounds off a province
+   const rest=provinceOf(t.id).regs.filter(id=>id!==t.id),mineN=rest.filter(id=>P(id).owner===f).length;
+   const score=r*(mineN&&mineN===rest.length?AI.provinceBias:mineN?(1+AI.provinceBias)/2:1);
+   if(score>bscore){bscore=score;bs=r;best=t}});
   if(best&&bs>aggr&&attacks<AI.maxAttacksPerTurn){
    // keep enough at home to face the strongest neighbouring army (anyone's, not only the player's)
    const threat=Math.max(0,...adj(p.id).map(P).filter(t=>t.owner!==f&&t!==best).map(t=>str(t.army)));
