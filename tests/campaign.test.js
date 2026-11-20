@@ -18,7 +18,7 @@ async function playerBot() {
   if (!G.fac[PLAYER].res) { const t = Object.keys((await import('../src/js/data.js')).TECH).find(id => R.techAvailable(PLAYER, id)); if (t) R.setResearch(PLAYER, t); }
   for (const pv of R.fullProvinces(PLAYER)) if (R.provEdict(pv) === 'none' && G.fac[PLAYER].gold > 1500) R.setEdict(PLAYER, pv, 'trade');
   for (const p of G.prov.filter(p => p.owner === PLAYER && !p.cons)) {
-    for (const b of ['barracks', 'farm', 'market', 'church', 'range', 'stable']) { const o = R.buildOptions(p).find(x => x.b === b); if (o && o.ok && G.fac[PLAYER].gold - o.cost > 900) { R.startBuild(p, b); break; } }
+    for (const b of (R.foodOf(PLAYER).net < 3 ? ['farm', 'barracks', 'market', 'church', 'range', 'stable'] : ['barracks', 'farm', 'market', 'church', 'range', 'stable'])) { const o = R.buildOptions(p).find(x => x.b === b); if (o && o.ok && G.fac[PLAYER].gold - o.cost > 900) { R.startBuild(p, b); break; } }
   }
   // recruit in frontier lands: a general first, then troops the buildings allow
   for (const p of G.prov.filter(p => p.owner === PLAYER)) {
@@ -27,7 +27,7 @@ async function playerBot() {
     G.sel = p.id;
     if (!p.army.some(u => UT[u.t].general) && R.generals(PLAYER) < R.maxGenerals(PLAYER) && G.fac[PLAYER].gold > 600) recruit('gen');
     const plan = ['spear', 'druzh', 'arch', 'knight', 'druzh', 'hasb', 'spear', 'mil'].filter(t => R.unitAvailable(p, t));
-    while (plan.length && p.army.length < 8 && p.rec < p.lvl) { const t = plan[p.army.length % plan.length]; if (G.fac[PLAYER].gold < R.unitCost(PLAYER, t) + 150) break; recruit(t); }
+    while (plan.length && p.army.length < 8 && p.rec < p.lvl) { const t = plan[p.army.length % plan.length]; if (G.fac[PLAYER].gold < R.unitCost(PLAYER, t, p) + 150) break; const fd = R.foodOf(PLAYER); if (fd.net < 2 && fd.store < 20) break; recruit(t); }
   }
   // attack when clearly stronger, with a general, never leave the capital empty early
   for (const p of G.prov.filter(p => p.owner === PLAYER && p.army.length && !p.moved)) {

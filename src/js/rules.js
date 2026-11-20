@@ -1,5 +1,5 @@
 // Campaign rules: income, upkeep, public order, buildings, decrees, technologies, generals.
-import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS } from './data.js';
+import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS, FOOD } from './data.js';
 import { G, P, mk, addLog } from './state.js';
 import { rand } from './rng.js';
 import { tradeIncome } from './diplo.js';
@@ -65,6 +65,7 @@ export function buildingEffect(b,l){
  if(e.inc)x.push(`доход +${Math.round(e.inc*100)}%`);
  if(e.gold)x.push(`+${e.gold} золота`);
  if(e.order)x.push(`порядок +${e.order}`);
+ if(e.food)x.push(`еда +${e.food}`);
  if(e.gar)x.push(`гарнизон +${e.gar}`);
  if(e.wall)x.push(e.wall>1?'каменные стены':'деревянные стены');
  return x.join(', ');
@@ -86,6 +87,35 @@ export function generals(f){return G.prov.reduce((s,p)=>s+p.army.filter(u=>UT[u.
 // AI states sitting on a big treasury raise an extra army for every 5000 gold
 export function maxGenerals(f){return maxGeneralsFor(G.prov.filter(p=>p.owner===f).length)+(f!==PLAYER?Math.min(3,Math.floor((G.fac[f].gold||0)/5000)):0)}
 
+// ---------- food ----------
+// event hosts (Order, Horde) live off the land and the rebels have no state to feed
+export function eatsFood(f){return f!=='rebel'&&!!FACT[f]&&!FACT[f].event}
+export function regionFood(p){
+ let v=FOOD.tier[p.tier]+sumEffect(p,'food');
+ if(p.raided>0)v*=FOOD.raided;
+ if(p.occ>0)v=0;
+ return Math.round(v)-FOOD.town[p.lvl];
+}
+export function armyFood(p){return p.army.filter(u=>!UT[u.t].general).length*FOOD.unit}
+export function foodOf(f){
+ let prod=0,use=0;
+ for(const p of G.prov)if(p.owner===f){const r=regionFood(p);if(r>=0)prod+=r;else use-=r;use+=armyFood(p)}
+ const F=G.fac[f]||{};
+ return {prod,use,net:prod-use,store:F.food||0};
+}
+export function starving(f){return eatsFood(f)&&!!(G.fac[f]&&G.fac[f].famine)}
+// once a year: the granary takes the surplus or covers the deficit
+export function foodYear(){
+ for(const f in G.fac){
+  if(!eatsFood(f)||!G.prov.some(p=>p.owner===f))continue;
+  const F=G.fac[f],{net}=foodOf(f),was=!!F.famine;
+  F.food=Math.max(0,Math.min(FOOD.store,(F.food||0)+net));
+  F.famine=net<0&&F.food===0;
+  if(f===PLAYER&&F.famine&&!was)addLog('🌾 Голод! Амбары пусты: порядок падает, полки не пополняются. Строй пашни или распусти часть войск.');
+  if(f===PLAYER&&!F.famine&&was)addLog('🌾 Голод отступил.');
+ }
+}
+
 // ---------- order ----------
 export function orderOf(p){
  if(p.owner==='rebel')return 0;
@@ -99,6 +129,7 @@ export function orderOf(p){
  if(holdsSeat(p))o+=PROVINCE_BONUS.seatOrder;
  if(hasTech(f,'civ3'))o+=10;
  if(p.raided>0)o-=10;                 // plundered by raiders
+ if(starving(f))o+=FOOD.famineOrder;
  return Math.max(-100,Math.min(100,o));
 }
 
@@ -183,11 +214,13 @@ export function aiEconomy(f){
  }
  // build where useful (a few towns a year), keeping a reserve for the army
  const towns=own.filter(p=>!p.cons).sort((a,b)=>b.tier-a.tier||b.base-a.base);
+ const fd=foodOf(f),hungry=eatsFood(f)&&fd.net<2;
+ const order=hungry?['farm',...AI_BUILD_ORDER.filter(b=>b!=='farm')]:AI_BUILD_ORDER;
  let built=0;
  for(const p of towns){
   if(built>=3||F.gold<800)break;
-  for(const b of AI_BUILD_ORDER){const o=buildOptions(p).find(x=>x.b===b);if(o&&o.ok&&F.gold-o.cost>500){startBuild(p,b);built++;break}}
+  for(const b of order){const o=buildOptions(p).find(x=>x.b===b);if(o&&o.ok&&F.gold-o.cost>500){startBuild(p,b);built++;break}}
  }
  // grow settlements when rich
- if(F.gold>2500){const p=own.filter(p=>p.lvl<3).sort((a,b)=>b.base-a.base)[0];if(p){F.gold-=SETTLE_COST*p.lvl;p.lvl++}}
+ if(F.gold>2500&&!hungry){const p=own.filter(p=>p.lvl<3).sort((a,b)=>b.base-a.base)[0];if(p){F.gold-=SETTLE_COST*p.lvl;p.lvl++}}
 }

@@ -1,6 +1,6 @@
 import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS } from './data.js';
 import * as D from './diplo.js';
-import { income, orderOf, generals, maxGenerals, provEdict, setEdict, ownsProvince, fullProvinces, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
+import { foodOf, starving, income, orderOf, generals, maxGenerals, provEdict, setEdict, ownsProvince, fullProvinces, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
 const PLAYER_=()=>PLAYER;
 import { PROV_DEF } from './data.js';
 import { $ } from './util.js';
@@ -25,6 +25,7 @@ export function showHelp(){modal(`<h2>Как играть</h2>
 <p><b>Цель:</b> собери ${WIN_N} земель или сокруши все остальные великие державы. Потеряешь все земли — конец.</p>
 <p><b>Карта:</b> двигай пальцем, двумя пальцами — масштаб (или кнопки ＋ ／ − ／ ◎). Нажми свою землю с войском (⚔), выбери отряды и нажми на подсвеченную соседнюю землю. Голубой пунктир — путь по морю.</p>
 <p><b>Казна и постройки:</b> земли приносят золото, войска стоят содержания. В каждой земле есть места под постройки: казармы, стрельбища и конюшни открывают отряды, пашни и торг дают доход, храм — порядок, стены — защиту. Город выше уровнем — больше мест и найма.</p>
+<p><b>Еда (🌾):</b> её дают земли (особенно малые сельские) и пашни, едят города побольше и каждый полк. Излишек идёт в амбары (до 60). Когда амбары пусты, а еды не хватает — голод: порядок −15 везде, полки не пополняются. Войско в осаде или в только что взятой земле теряет людей.</p>
 <p><b>Порядок:</b> падает в захваченных и чужих по культуре землях и от податей. Если долго ниже нуля — бунт. Помогают войско в земле, храм и указ «Правда и покой».</p>
 <p><b>Провинции:</b> земли объединены в провинции по 2–4 (толстые границы на карте). Возьми провинцию целиком — доход +15%, порядок +5 и можно издать в ней указ. Столица провинции успокаивает остальные её земли.</p>
 <p><b>Держава (☰):</b> провинции и указы, знания (технологии), послы: мир, торговля, союз, война. Нападать можно только на тех, с кем война, и на вольные земли.</p>
@@ -86,6 +87,7 @@ export function showRealm(tab){
   const low=own.filter(p=>orderOf(p)<0);
   body=`<p>Земель: <b>${own.length}</b> из ${WIN_N} для победы · Воевод: <b>${generals(f)}/${maxGenerals(f)}</b></p>
   <p>Доход: <b>+${inc.inc}</b> · Содержание войск: <b>−${inc.up}</b> · Итого: <b style="color:${inc.net>=0?'#7bc96f':'#e57373'}">${inc.net>=0?'+':''}${inc.net}</b> в год</p>
+  ${(()=>{const fd=foodOf(f);return `<p>Еда: урожай <b>+${fd.prod}</b> · едят города и войска <b>−${fd.use}</b> · итого <b style="color:${fd.net>=0?'#7bc96f':'#e57373'}">${fd.net>=0?'+':''}${fd.net}</b> · в амбарах <b>${fd.store}</b>/60${starving(f)?' · <b style="color:#e57373">голод: порядок −15, полки не пополняются</b>':fd.net<0?' · <span style="color:#e0b34a">амбары пустеют</span>':''}</p>`})()}
   <p>Провинций целиком: <b>${fullProvinces(f).length}</b> · указов: <b>${fullProvinces(f).filter(pv=>provEdict(pv)!=='none').length}</b> · Изучается: <b>${F.res?TECH[F.res.id].n+` (${F.res.pts}/${TECH[F.res.id].cost})`:'ничего'}</b> (+${researchPoints(f)} в год)</p>
   ${low.length?`<p style="color:#e57373">Неспокойно: ${low.map(p=>p.n).join(', ')}. Поставь войско, храм или указ «Правда и покой».</p>`:'<p class="small">Во всех землях спокойно.</p>'}
   <div class="row" style="margin-top:10px"><button onclick="showSaves()">💾 Сохранения</button><button onclick="showHelp()">? Как играть</button></div>`;

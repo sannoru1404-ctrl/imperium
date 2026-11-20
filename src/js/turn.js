@@ -7,7 +7,8 @@ import { modal, closeModal, ask } from './ui.js';
 import { rand } from './rng.js';
 import { aiDiplomacy, atWar, declareWar, rel } from './diplo.js';
 import { reliefStr, gatherReinforcements, reinfText, afterBattle, stanceMods, stanceOf, aiStances, raids, runEvents, eventSupply, nameGenerals, makeGeneral, EVENT_AGGR, isGen } from './war.js';
-import { yearlyUpdate, garMax, aiEconomy, unitAvailable, unitCost, generals, maxGenerals, wallLevel, hasTech, provinceOf } from './rules.js';
+import { yearlyUpdate, garMax, aiEconomy, unitAvailable, unitCost, generals, maxGenerals, wallLevel, hasTech, provinceOf, foodYear, foodOf, starving, eatsFood } from './rules.js';
+import { FOOD } from './data.js';
 
 // ===================== TURN =====================
 export async function endTurn(){
@@ -23,6 +24,7 @@ export async function endTurn(){
  G.turn++;
  raids();
  for(const f in G.fac){if(f==='rebel')continue;G.fac[f].gold=Math.max(0,G.fac[f].gold+income(f).net)}
+ foodYear();
  G.prov.forEach(p=>{
   p.moved=false;p.rec=0;p.mstep=0;
   if(!p.army.some(isGen))p.stance='none';
@@ -30,7 +32,10 @@ export async function endTurn(){
   if(p.occ>0)p.occ--;
   // independent lands slowly raise their own warband
   if(p.owner==='rebel'&&G.turn%REBELS.armyEvery===0&&p.army.length<REBELS.armyMax)p.army.push(mk(REBELS.unit[p.army.length%REBELS.unit.length]));
-  p.army.forEach(u=>u.hp=Math.min(100,u.hp+12));
+  // replenishment: none while starving; armies on foreign soil lose men instead
+  const loss=p.besiege?FOOD.siegeLoss:p.occ>0&&p.owner!=='rebel'?FOOD.occLoss:0;
+  if(loss&&eatsFood(p.owner))p.army.forEach(u=>u.hp=Math.max(20,u.hp-loss));
+  else if(!starving(p.owner))p.army.forEach(u=>u.hp=Math.min(100,u.hp+12));
  });
  sieges();
  yearlyUpdate();
@@ -53,6 +58,12 @@ export async function aiTurn(f){
  const F=G.fac[f];
  const mine=()=>G.prov.filter(p=>p.owner===f);
  const border=p=>adj(p.id).some(a=>P(a).owner!==f);
+ // a starving state sends its weakest regiments home, starting far from the front
+ if(starving(f)){
+  const pool=mine().flatMap(p=>p.army.filter(u=>!UT[u.t].general).map(u=>({p,u})))
+   .sort((a,b)=>(border(a.p)-border(b.p))||(str([a.u])-str([b.u])));
+  for(const {p,u} of pool){if(foodOf(f).net>=0)break;p.army=p.army.filter(x=>x!==u)}
+ }
  // upgrade a settlement now and then
  if(F.gold>1600){const p=mine().filter(p=>p.lvl<3).sort((a,b)=>b.base-a.base)[0];if(p){F.gold-=SETTLE_COST*p.lvl;p.lvl++}}
  aiEconomy(f);
@@ -69,6 +80,7 @@ export async function aiTurn(f){
    if(!t)break;
    const reserve=G.turn<4?0:150;
    if(F.gold<unitCost(f,t,p)+reserve||income(f).net<40)break;
+   if(t!=='gen'&&eatsFood(f)){const fd=foodOf(f);if(fd.net<3&&fd.store<30)break}  // no bread for more regiments
    F.gold-=unitCost(f,t,p);const u=mk(t);makeGeneral(u,f);p.army.push(u);p.rec++;
   }
  }

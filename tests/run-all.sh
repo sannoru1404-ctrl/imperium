@@ -2,7 +2,7 @@
 # Runs all headless tests. Usage: sh tests/run-all.sh   (CAMPAIGNS=20 RUNS=5 for a quick run)
 set -e
 cd "$(dirname "$0")"
-for t in boot saves provinces render battle siege war campaign; do
+for t in boot saves provinces food render battle siege war campaign; do
   echo "== $t"
   timeout 600 node "$t.test.js"
 done

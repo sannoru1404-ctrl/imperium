@@ -119,7 +119,7 @@ export const BUILDINGS={
  barracks:{n:'Казармы',     i:'⚔️',lv:[{cost:300,unlock:['spear']},{cost:650,unlock:['druzh']}]},
  range:   {n:'Стрельбище',  i:'🏹',lv:[{cost:300,unlock:['arch']},{cost:650,unlock:['xbow']}]},
  stable:  {n:'Конюшни',     i:'🐎',lv:[{cost:400,unlock:['hasb']},{cost:900,unlock:['knight']}]},
- farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.1},{cost:500,inc:0.2},{cost:900,inc:0.3}]},
+ farm:    {n:'Пашни',       i:'🌾',lv:[{cost:250,inc:0.1,food:3},{cost:500,inc:0.2,food:3},{cost:900,inc:0.3,food:3}]},
  market:  {n:'Торг',        i:'⚖️',lv:[{cost:350,gold:30},{cost:700,gold:60},{cost:1200,gold:100}]},
  church:  {n:'Храм',        i:'⛪',lv:[{cost:300,order:10},{cost:650,order:20},{cost:1100,order:30}]},
  walls:   {n:'Стены',       i:'🧱',lv:[{cost:400,gar:2,wall:1},{cost:900,gar:4,wall:2}]},
@@ -127,6 +127,14 @@ export const BUILDINGS={
 // which building level a unit needs (mil and gen need nothing)
 export const UNIT_REQ={spear:['barracks',1],druzh:['barracks',2],arch:['range',1],xbow:['range',2],hasb:['stable',1],knight:['stable',2]};
 export const GEN_UPKEEP=50, UNIT_UPKEEP=25;
+// Food: one balance per state. Villages feed, towns and regiments eat. Surplus fills the granary,
+// a deficit empties it; with an empty granary the state starves.
+// tier: food a region yields (small lands are farmland) · farm: per level of Пашни (in BUILDINGS)
+// town: what a settlement of level 1..3 eats · unit: per regiment (the general's retinue eats nothing extra)
+export const FOOD={tier:{1:4,2:3,3:2},town:{1:0,2:2,3:5},unit:1,raided:0.5,
+ store:60,startStore:20,
+ famineOrder:-15,        // order in every land while starving
+ siegeLoss:8,occLoss:4}; // hp a regiment loses per year besieging / standing in a freshly conquered land (no replenishment there)
 export const MAX_ARMY=12;   // regiments in one army (incl. the general)
 
 // Decrees are issued per province, only while the whole province is held; changing one costs gold.
