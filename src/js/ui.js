@@ -1,5 +1,7 @@
 import { WIN_N, MAJORS, FACT, EDICTS, EDICT_COST, TECH, PLAYER, PROVINCES, PROVINCE_BONUS, FAITHS, faithOf } from './data.js';
 import * as D from './diplo.js';
+import { RANK } from './diplo.js';
+import { DIPLO } from './data.js';
 import { foodOf, starving, income, orderOf, generals, maxGenerals, provEdict, setEdict, ownsProvince, fullProvinces, hasTech, techAvailable, setResearch, researchPoints } from './rules.js';
 const PLAYER_=()=>PLAYER;
 import { PROV_DEF } from './data.js';
@@ -29,7 +31,7 @@ export function showHelp(){modal(`<h2>Как играть</h2>
 <p><b>Вера:</b> в каждой земле живут люди разной веры. Чем меньше в земле твоей веры, тем ниже порядок (до −20). Твоя вера растёт сама по 2% в год, каждый уровень храма — ещё +3%. Державы другой веры охотнее нападают и труднее идут в союз.</p>
 <p><b>Порядок:</b> падает в захваченных и чужих по культуре землях и от податей. Если долго ниже нуля — бунт. Помогают войско в земле, храм и указ «Правда и покой».</p>
 <p><b>Провинции:</b> земли объединены в провинции по 2–4 (толстые границы на карте). Возьми провинцию целиком — доход +15%, порядок +5 и можно издать в ней указ. Столица провинции успокаивает остальные её земли.</p>
-<p><b>Держава (☰):</b> провинции и указы, знания (технологии), послы: мир, торговля, союз, война. Нападать можно только на тех, с кем война, и на вольные земли.</p>
+<p><b>Держава (☰):</b> провинции и указы, знания (технологии), послы: мир, ненападение, торговля, оборонительный и военный союз, вассалы, дань, война. Союзники вступают в войну по договору. Нападать можно только на тех, с кем война, и на вольные земли.</p>
 <p><b>Воевода:</b> один на войско. Рядом с ним полки стойче и быстрее приходят в себя. Если он погибнет или побежит — всё войско дрогнет.</p>
 <p><b>Опыт и черты:</b> выжившие в боях отряды получают звёзды ★ (до трёх): каждая прибавляет атаку, защиту и дух. Воеводы растут в чине и получают черты: стратег, храбрец, мастер осад, быстрый, хозяйственный (бывает и трус).</p>
 <p><b>Подкрепления:</b> войско с воеводой в соседней земле само вступает в бой — и твоё, и вражеское. После боя оно возвращается домой.</p>
@@ -94,13 +96,20 @@ export function showRealm(tab){
   <div class="row" style="margin-top:10px"><button onclick="showSaves()">💾 Сохранения</button><button onclick="showHelp()">? Как играть</button></div>`;
  } else if(REALM_TAB==='diplo'){
   const fs=Object.keys(FACT).filter(x=>x!==f&&x!=='rebel'&&D.alive(x));
-  const order=x=>(D.atWar(f,x)?0:D.borders(f,x)?1:2);
+  const order=x=>(D.atWar(f,x)?0:D.overlord(x)===f?1:D.borders(f,x)?2:3);
   fs.sort((a,b)=>order(a)-order(b)||D.power(b)-D.power(a));
-  body=`<p class="small">Торговля даёт доход обеим сторонам. Союзники не нападают друг на друга. Отношение — как к тебе относятся (от −100 до 100).</p>`+fs.map(x=>{const r=D.rel(f,x),a=Math.round(G.att[x]||0);
+  const tr=D.tributeIncome(f),vs=D.vassalsOf(f);
+  body=`<p class="small">Договоры идут лесенкой: мир → ненападение → торговля → оборонительный союз (защищает при нападении) → военный союз (вступает и в твои войны). Вассал платит ${Math.round(DIPLO.vassalTax*100)}% дохода и воюет за тебя. Дань — ${Math.round(DIPLO.tribShare*100)}% дохода земель в год, ${DIPLO.tribYears} лет. Отношение — как к тебе относятся (от −100 до 100).</p>
+  ${tr||vs.length?`<p>Дань и вассалы: <b style="color:${tr>=0?'#7bc96f':'#e57373'}">${tr>=0?'+':''}${tr}</b> в год${vs.length?' · вассалы: '+vs.map(v=>FACT[v].n).join(', '):''}</p>`:''}`+fs.map(x=>{const r=D.rel(f,x),a=Math.round(G.att[x]||0),ov=D.overlord(x);
    const btn=(k,n)=>{const [ok]=D.proposal(x,k);return `<button onclick="diplo('${x}','${k}')" ${ok?'':'style="opacity:.55"'}>${n}</button>`};
-   const acts=r==='war'?btn('peace','🕊 Мир'):r==='peace'?btn('trade','⚖️ Торговля')+btn('ally','🤝 Союз')+`<button onclick="diplo('${x}','war')">⚔ Война</button>`:r==='trade'?btn('ally','🤝 Союз')+`<button onclick="diplo('${x}','war')">⚔ Война</button>`:`<button onclick="diplo('${x}','war')">⚔ Война</button>`;
+   const war=`<button onclick="diplo('${x}','war')">⚔ Война</button>`;
+   const up={peace:['nap','✋ Ненападение'],nap:['trade','⚖️ Торговля'],trade:['def','🛡 Оборон. союз'],def:['ally','🤝 Военный союз']};
+   const acts=ov===f?`<button onclick="diplo('${x}','release')">Отпустить</button>`
+    :r==='war'?btn('peace','🕊 Мир')+btn('payPeace','🕊 Мир за дань')+btn('tribute','💰 Дань')+btn('vassal','👑 Вассалитет')
+    :(up[r]?btn(...up[r]):'')+(r==='peace'?btn('trade','⚖️ Торговля'):'')+(r!=='def'&&r!=='ally'&&RANK[r]>=1?btn('ally','🤝 Военный союз'):'')+(RANK[r]<3?btn('tribute','💰 Дань')+btn('vassal','👑 Вассалитет'):'')+war;
+   const tribs=D.tributesOf(x).filter(t=>t.from===f||t.to===f).map(t=>t.to===f?`платят тебе ${t.amt}`:`ты платишь ${t.amt}`).join(', ');
    return `<div class="rec" style="flex-wrap:wrap"><div style="min-width:150px;flex:1"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${FACT[x].c};margin-right:5px"></span><b>${FACT[x].n}</b>
-    <div class="small">${D.REL_I[r]} ${D.REL_N[r]} · ${FAITHS[faithOf(x)].i}${D.borders(f,x)?' · сосед':''} · отношение <span style="color:${a>=20?'#7bc96f':a>=-10?'#e0b34a':'#e57373'}">${a>0?'+':''}${a}</span> · сила ${Math.round(D.power(x))}</div></div>
+    <div class="small">${D.REL_I[r]} ${D.REL_N[r]}${ov?` · 👑 вассал ${ov===f?'твой':FACT[ov].n}`:''}${tribs?' · 💰 '+tribs:''} · ${FAITHS[faithOf(x)].i}${D.borders(f,x)?' · сосед':''} · отношение <span style="color:${a>=20?'#7bc96f':a>=-10?'#e0b34a':'#e57373'}">${a>0?'+':''}${a}</span> · сила ${Math.round(D.power(x))}</div></div>
     <div class="row" style="gap:4px">${acts}</div></div>`}).join('');
  } else if(REALM_TAB==='edict'){
   const mine=Object.values(PROVINCES).filter(pv=>pv.regs.some(id=>P(id).owner===f));
@@ -126,6 +135,7 @@ export async function diplo(x,kind){
  const f=PLAYER_();
  if(kind==='war'){const ok=await ask('Объявить войну?',`<p>${FACT[x].n}: ${D.REL_N[D.rel(f,x)]}.${D.rel(f,x)!=='peace'?' Разрыв договора подорвёт доверие всех держав.':''}</p>`,[['y','⚔ Объявить',1],['n','Отмена']]);
   if(ok==='y'){D.declareWar(f,x);render()}showRealm('diplo');return}
+ if(kind==='release'){D.releaseVassal(x);render();showRealm('diplo');return}
  const [ok,why]=D.propose(x,kind);
  if(ok){render();showRealm('diplo')}
  else{await ask('Отказ',`<p>${FACT[x].n} отказываются. ${why}</p>`,[['ok','Понятно',1]]);showRealm('diplo')}

@@ -54,7 +54,7 @@ export function newGame(gameSeed,faction){
  render(true);
 }
 // ---------- saves: 3 manual slots + autosave, versioned ----------
-export const SAVE_VER=7; // v7: religion (older saves are not compatible)
+export const SAVE_VER=8; // v8: treaties, vassals, tribute (older saves are not compatible)
 export const SLOTS=['auto','1','2','3'];
 const key=slot=>'imperium_v'+SAVE_VER+'_'+slot;
 export function saveSlot(slot='auto'){

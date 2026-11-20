@@ -2,7 +2,7 @@
 import { FACT, UT, BUILDINGS, UNIT_REQ, EDICTS, EDICT_COST, TECH, ORDER, GEN_UPKEEP, UNIT_UPKEEP, maxGeneralsFor, RECRUIT, PLAYER, REBELS, SETTLE_COST, RAID_SHARE, PROVINCES, PROV_OF, PROVINCE_BONUS, FOOD, FAITHS, FAITH, faithOf } from './data.js';
 import { G, P, mk, addLog } from './state.js';
 import { rand } from './rng.js';
-import { tradeIncome } from './diplo.js';
+import { tradeIncome, tributeIncome } from './diplo.js';
 
 // ---------- technologies ----------
 export function hasTech(f,id){return !!(G&&G.fac&&G.fac[f]&&G.fac[f].tech&&G.fac[f].tech[id])}
@@ -181,7 +181,7 @@ export function upkeepOf(f){
 export function income(f){
  let inc=0;
  for(const p of G.prov)if(p.owner===f)inc+=provIncome(p);
- inc+=tradeIncome(f);
+ inc+=tradeIncome(f)+tributeIncome(f);
  const up=upkeepOf(f);
  return {inc,up,net:inc-up};
 }

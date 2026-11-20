@@ -192,13 +192,18 @@ export const ORDER={base:10,occupied:-40,foreign:-15,perGarrison:3,maxGarrison:1
 export function maxGeneralsFor(regions){return Math.min(10,1+Math.floor(regions/4))}
 
 // ===================== DIPLOMACY =====================
-// Relations between states: 'war' | 'peace' | 'trade' (peace + trade deal) | 'ally' (alliance, includes trade).
+// Relations between states form a ladder: 'war' < 'peace' < 'nap' (non-aggression) < 'trade' < 'def' (defensive alliance)
+// < 'ally' (military alliance). Each step includes the ones below. Vassals (G.vas) and tribute (G.trib) come on top.
 // Independent lands ('rebel') can always be attacked. Wars standing in 1100 (approximate):
 export const START_WARS=[['rus','cuman'],['byz','sel'],['cru','fat'],['cru','sel'],['cas','alm'],['hun','cro'],['sic','byz'],['eng','fra']];
 export const START_ALLIES=[['byz','ven'],['hre','boh'],['rus','pol']];
 export const START_TRADE=[['ven','sic'],['den','swe'],['novg','swe'],['eng','den'],['rus','byz']];
 export const SETTLE_COST=600;      // ×current level to grow a settlement
-export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.06,peaceChance:0.12,minWarYears:4};
+export const DIPLO={tradePerRegion:4,tradeCap:60,warChance:0.06,peaceChance:0.12,minWarYears:4,
+ vassalTax:0.2,        // share of a vassal's land income paid to the overlord
+ tribShare:0.15,tribYears:10, // tribute: share of the payer's land income, for this many years
+ maxAllies:2,          // AI states keep at most this many alliances (def + ally)
+ napChance:0.05,tradeChance:0.04,defChance:0.02};
 
 // ===================== VETERANS & GENERALS =====================
 // Units gain experience (0..3 stars) by surviving battles: each star +0.5 atk/def and +5 morale.
